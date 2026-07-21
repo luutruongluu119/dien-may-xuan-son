@@ -21,6 +21,11 @@
         <td>{% if a.published %}<span class="tag tag-ok">Đã đăng</span>{% else %}<span class="tag tag-done">Nháp</span>{% endif %}</td>
         <td>
           <a href="{{ url_for('admin_article_edit', article_id=a.id) }}">Sửa</a> ·
+          {% if not a.published %}
+          <form class="inline-form" method="post" action="{{ url_for('admin_article_approve', article_id=a.id) }}">
+            <button type="submit" class="btn" style="padding:0;background:none;color:var(--success);font-weight:600">Duyệt & đăng</button>
+          </form> ·
+          {% endif %}
           <form class="inline-form" method="post" action="{{ url_for('admin_article_delete', article_id=a.id) }}"
                 onsubmit="return confirm('Xoá bài viết này?');">
             <button type="submit" class="btn" style="padding:0;background:none;color:var(--danger);font-weight:600">Xoá</button>

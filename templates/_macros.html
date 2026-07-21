@@ -19,15 +19,11 @@
 </a>
 {% endmacro %}
 
-{% macro brand_grid(title, brands, category_slug) %}
+{% macro brand_strip(brands, title) %}
 <section class="wrap section brand-block">
   <h2 class="section-title">{{ title }}</h2>
   <div class="brand-grid">
-    {% for b in brands[:15] %}{{ brand_card(b, url_for('category_page', slug=category_slug, brand=b.id)) }}{% endfor %}
-    <a href="{{ url_for('category_page', slug=category_slug) }}" class="brand-card brand-card-more">
-      <span class="brand-card-logo brand-card-more-icon">+</span>
-      <span class="brand-card-name">Xem thêm</span>
-    </a>
+    {% for b in brands %}{{ brand_card(b, url_for('search_page', q=b.name)) }}{% endfor %}
   </div>
 </section>
 {% endmacro %}
@@ -41,7 +37,10 @@
       <span class="card-img-placeholder">{{ cat_icon(nav_categories|selectattr('slug','equalto',p.category_slug)|map(attribute='icon')|first|default('📦'), p.name) }}</span>
     {% endif %}
     {% if p.sale_price %}
-      <span class="badge badge-sale">-{{ ((1 - p.sale_price / p.price) * 100)|round|int }}%</span>
+      <span class="badge badge-sale"><span class="badge-sale-label">SALE</span><b>-{{ ((1 - p.sale_price / p.price) * 100)|round|int }}%</b></span>
+    {% endif %}
+    {% if p.is_featured %}
+      <span class="badge badge-hot">🔥 Hot</span>
     {% endif %}
   </a>
   <div class="card-body">

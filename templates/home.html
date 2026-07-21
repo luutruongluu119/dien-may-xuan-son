@@ -1,33 +1,43 @@
 {% extends "base.html" %}
-{% from "_macros.html" import product_card, brand_grid, cat_icon %}
+{% from "_macros.html" import product_card, brand_strip, cat_icon with context %}
 {% block content %}
 
 <section class="hero">
+  <img class="hero-bg" src="{{ url_for('static', filename='img/hero-banner.jpg') }}" alt="Khách hàng Điện Máy Xuân Sơn với điều hòa, tivi, máy giặt, robot hút bụi thông minh">
+  <div class="hero-scrim"></div>
+  <div class="hero-sale"><small>SALE</small><b>-40%</b></div>
   <div class="wrap hero-inner">
     <div class="hero-text">
-      <h1>{{ settings.tagline }}</h1>
-      <p>Điều hòa, máy giặt, bình nóng lạnh, tủ lạnh, gia dụng, tivi chính hãng — giá kho, giao lắp tận nơi tại Bắc Từ Liêm &amp; Hà Nội.</p>
-      <a href="tel:{{ settings.hotline|replace('.', '') }}" class="btn btn-gold">☎ Gọi ngay {{ settings.hotline }}</a>
-    </div>
-    <div class="hero-badges">
-      <div class="hero-badge">✅ Hàng chính hãng</div>
-      <div class="hero-badge">🚚 Giao lắp tận nơi</div>
-      <div class="hero-badge">🛡 Bảo hành dài hạn</div>
+      <span class="hero-eyebrow">🔥 Ưu đãi tuần này — giảm đến 40%</span>
+      <h1>{{ settings.tagline }}<br><em>{{ settings.company_name }}</em></h1>
+      <p>Điều hòa, máy giặt, tủ lạnh, robot lau nhà, gia dụng thông minh — giá kho, giao lắp tận nơi.</p>
+      <div class="hero-actions">
+        <a href="tel:{{ settings.hotline|replace('.', '') }}" class="btn btn-gold">☎ Gọi ngay {{ settings.hotline }}</a>
+        <a href="#san-pham-ban-chay" class="btn btn-outline">Xem ưu đãi hot →</a>
+      </div>
     </div>
   </div>
 </section>
 
-<div class="wrap quick-cats">
-  {% for c in nav_categories %}
-    <a href="{{ url_for('category_page', slug=c.slug) }}" class="quick-cat">
-      <span class="quick-cat-icon">{{ cat_icon(c.icon, c.name) }}</span>{{ c.name }}
-    </a>
-  {% endfor %}
-</div>
+<section class="trust-strip">
+  <div class="wrap trust-grid">
+    <div class="trust-item"><span class="ti">✅</span><span>Hàng chính hãng<small>Đầy đủ tem bảo hành</small></span></div>
+    <div class="trust-item"><span class="ti">⚡</span><span>Ship miễn phí<small>Nội thành trong 30 phút</small></span></div>
+    <div class="trust-item"><span class="ti">🛠</span><span>Bảo hành tại nhà<small>Chính hãng, dài hạn</small></span></div>
+    <div class="trust-item"><span class="ti">☎</span><span>Tư vấn tận tâm<small>Hotline hỗ trợ nhanh</small></span></div>
+  </div>
+</section>
 
-{% for title, group_brands, cat_slug in brand_groups %}
-  {{ brand_grid(title, group_brands, cat_slug) }}
-{% endfor %}
+<section class="wrap section quick-cats-section">
+  <h2 class="section-title">Mua sắm theo loại sản phẩm</h2>
+  <div class="quick-cats">
+    {% for c in nav_categories %}
+      <a href="{{ url_for('category_page', slug=c.slug) }}" class="quick-cat">
+        <span class="quick-cat-icon">{{ cat_icon(c.icon, c.name) }}</span>{{ c.name }}
+      </a>
+    {% endfor %}
+  </div>
+</section>
 
 {% if articles %}
 <section class="wrap section">
@@ -48,11 +58,62 @@
 </section>
 {% endif %}
 
-{% if featured %}
+{% if latest %}
 <section class="wrap section">
-  <h2 class="section-title">Sản phẩm bán chạy</h2>
+  <div class="listing-head">
+    <h2 class="section-title">Sản phẩm mới nhất</h2>
+  </div>
   <div class="grid">
-    {% for p in featured %}{{ product_card(p) }}{% endfor %}
+    {% for p in latest %}{{ product_card(p) }}{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="wrap section">
+  <div class="promo-grid">
+    <div class="promo-tile a">
+      <span class="pi">🚚</span>
+      <h3>Giao lắp trong ngày</h3>
+      <p>Đặt hàng buổi sáng, kỹ thuật viên lắp đặt ngay trong ngày tại nội thành Hà Nội.</p>
+      <a href="{{ url_for('about_page') }}#lien-he" class="see-more">Xem khu vực áp dụng →</a>
+    </div>
+    <div class="promo-tile b">
+      <span class="pi">🏗️</span>
+      <h3>Giá ưu đãi dự án & số lượng lớn</h3>
+      <p>Chiết khấu đặc biệt cho công trình, nhà thầu thi công và đơn hàng số lượng lớn — xuất hóa đơn VAT đầy đủ.</p>
+      <a href="{{ url_for('policy_page', slug='dai-ly') }}" class="see-more">Nhận báo giá dự án →</a>
+    </div>
+  </div>
+</section>
+
+{% if featured %}
+<section class="wrap section" id="san-pham-ban-chay">
+  <div class="listing-head">
+    <h2 class="section-title">Sản phẩm bán chạy nhất</h2>
+    {% set featured_cats = featured|map(attribute='category_slug')|unique|list %}
+    {% if featured_cats|length > 1 %}
+    <div class="catfilter-row" data-tabs>
+      <button type="button" class="catfilter-btn active" data-cat="">Tất cả</button>
+      {% for slug in featured_cats %}
+        {% set cat = featured|selectattr('category_slug', 'equalto', slug)|first %}
+        <button type="button" class="catfilter-btn" data-cat="{{ slug }}">{{ cat.category_name }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="grid" data-tab-grid>
+    {% for p in featured %}
+      <div class="tab-item" data-cat="{{ p.category_slug }}">{{ product_card(p) }}</div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if deal_products %}
+<section class="wrap section">
+  <h2 class="section-title">🔥 Deal hot trong ngày</h2>
+  <div class="grid grid-lg">
+    {% for p in deal_products %}{{ product_card(p) }}{% endfor %}
   </div>
 </section>
 {% endif %}
@@ -104,13 +165,8 @@
   </div>
 </section>
 
-{% if latest %}
-<section class="wrap section">
-  <h2 class="section-title">Sản phẩm mới nhất</h2>
-  <div class="grid">
-    {% for p in latest %}{{ product_card(p) }}{% endfor %}
-  </div>
-</section>
+{% if brands %}
+  {{ brand_strip(brands, "Thương hiệu phân phối") }}
 {% endif %}
 
 {% endblock %}

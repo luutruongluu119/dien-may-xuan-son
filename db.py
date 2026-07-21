@@ -81,6 +81,23 @@ CREATE TABLE IF NOT EXISTS articles (
     content TEXT DEFAULT '',
     category TEXT DEFAULT 'Kiến thức tiêu dùng',
     published INTEGER DEFAULT 1,
+    meta_title TEXT DEFAULT '',
+    meta_description TEXT DEFAULT '',
+    keyword TEXT DEFAULT '',
+    related_product_ids TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS content_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER REFERENCES categories(id),
+    product_ids TEXT DEFAULT '',
+    keyword TEXT NOT NULL,
+    content_type TEXT DEFAULT 'huong_dan',
+    notes TEXT DEFAULT '',
+    status TEXT DEFAULT 'cho_xu_ly',
+    article_id INTEGER REFERENCES articles(id),
+    error TEXT DEFAULT '',
     created_at TEXT NOT NULL
 );
 """
@@ -97,6 +114,12 @@ DEFAULT_SETTINGS = {
     "admin_username": "admin",
     # mật khẩu mặc định: xuanson2026 — đổi ngay trong Cài đặt sau khi đăng nhập
     "admin_password_hash": "scrypt:32768:8:1$xxxxxxxx_placeholder",
+    "claude_key": "",
+    "claude_model": "claude-sonnet-5",
+    "gemini_key": "",
+    "schedule_enabled": False,
+    "schedule_per_week": 2,
+    "fb_page_id": "",
 }
 
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
@@ -118,6 +141,11 @@ def _migrate(conn):
     cols = {row["name"] for row in conn.execute("PRAGMA table_info(brands)")}
     if "logo" not in cols:
         conn.execute("ALTER TABLE brands ADD COLUMN logo TEXT DEFAULT ''")
+
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(articles)")}
+    for col in ("meta_title", "meta_description", "keyword", "related_product_ids"):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE articles ADD COLUMN {col} TEXT DEFAULT ''")
 
 
 def init_db():
@@ -4714,20 +4742,6 @@ def list_brands_for_category(category_slug):
         ).fetchall()
 
 
-def list_brands_for_categories(category_slugs):
-    if not category_slugs:
-        return []
-    placeholders = ",".join("?" * len(category_slugs))
-    with get_conn() as c:
-        return c.execute(
-            f"""SELECT DISTINCT b.* FROM brands b
-               JOIN products p ON p.brand_id = b.id
-               JOIN categories c ON c.id = p.category_id
-               WHERE c.slug IN ({placeholders})
-               ORDER BY b.name""",
-            tuple(category_slugs),
-        ).fetchall()
-
 
 def list_brands_for_search(q):
     with get_conn() as c:
@@ -4788,7 +4802,8 @@ LEFT JOIN brands b ON b.id = p.brand_id
 
 
 def list_products(category_slug=None, brand_id=None, featured=None, q=None,
-                   sort="new", page=1, per_page=12, loai=None, duoi=None, xuat_xu=None):
+                   sort="new", page=1, per_page=12, loai=None, duoi=None, xuat_xu=None,
+                   on_sale=None):
     where = []
     params = []
     if category_slug:
@@ -4800,6 +4815,8 @@ def list_products(category_slug=None, brand_id=None, featured=None, q=None,
     if featured is not None:
         where.append("p.is_featured = ?")
         params.append(1 if featured else 0)
+    if on_sale:
+        where.append("p.sale_price IS NOT NULL AND p.sale_price < p.price")
     if q:
         where.append("p.name LIKE ?")
         params.append(f"%{q}%")
@@ -4820,6 +4837,7 @@ def list_products(category_slug=None, brand_id=None, featured=None, q=None,
         "price_asc": "COALESCE(p.sale_price, p.price) ASC",
         "price_desc": "COALESCE(p.sale_price, p.price) DESC",
         "name": "p.name ASC",
+        "discount": "(1.0 - (p.sale_price * 1.0 / p.price)) DESC",
     }.get(sort, "p.created_at DESC")
     count_sql = "SELECT COUNT(*) FROM (" + sql + ")"
     sql += f" ORDER BY {order} LIMIT ? OFFSET ?"
@@ -4827,6 +4845,26 @@ def list_products(category_slug=None, brand_id=None, featured=None, q=None,
         total = c.execute(count_sql, params).fetchone()[0]
         rows = c.execute(sql, params + [per_page, (page - 1) * per_page]).fetchall()
     return rows, total
+
+
+def search_products_for_chat(query: str, limit: int = 8):
+    """Tìm sản phẩm liên quan tới câu hỏi của khách (theo tên/hãng/danh mục/mô tả
+    ngắn) để ghim chatbot vào đúng dữ liệu thật đang bán, tránh bịa sản phẩm."""
+    words = [w for w in re.split(r"\s+", query.strip()) if len(w) > 1]
+    if not words:
+        return []
+    where_parts = []
+    params: list = []
+    for w in words[:6]:
+        where_parts.append(
+            "(p.name LIKE ? OR b.name LIKE ? OR c.name LIKE ? OR p.short_desc LIKE ?)"
+        )
+        params += [f"%{w}%"] * 4
+    sql = PRODUCT_SELECT + " WHERE " + " OR ".join(where_parts) + \
+        " ORDER BY p.is_featured DESC, p.created_at DESC LIMIT ?"
+    params.append(limit)
+    with get_conn() as c:
+        return c.execute(sql, params).fetchall()
 
 
 def get_product_by_slug(slug: str):
@@ -4901,6 +4939,48 @@ def list_all_products_admin():
         return c.execute(PRODUCT_SELECT + " ORDER BY p.created_at DESC").fetchall()
 
 
+def _price_filter_where(category_id=None, brand_id=None):
+    where, params = [], []
+    if category_id:
+        where.append("category_id = ?")
+        params.append(category_id)
+    if brand_id:
+        where.append("brand_id = ?")
+        params.append(brand_id)
+    sql = (" WHERE " + " AND ".join(where)) if where else ""
+    return sql, params
+
+
+def count_products_for_filter(category_id=None, brand_id=None) -> int:
+    sql, params = _price_filter_where(category_id, brand_id)
+    with get_conn() as c:
+        return c.execute(f"SELECT COUNT(*) FROM products{sql}", params).fetchone()[0]
+
+
+def bulk_adjust_price(category_id=None, brand_id=None, delta: int = 0) -> int:
+    if not delta:
+        return 0
+    sql, params = _price_filter_where(category_id, brand_id)
+    with get_conn() as c:
+        cur = c.execute(
+            "UPDATE products SET price = price + ?, "
+            "sale_price = CASE WHEN sale_price IS NOT NULL THEN sale_price + ? ELSE NULL END"
+            + sql,
+            [delta, delta] + params,
+        )
+        return cur.rowcount
+
+
+def get_products_by_ids(ids: list[int]):
+    if not ids:
+        return []
+    with get_conn() as c:
+        placeholders = ",".join("?" * len(ids))
+        rows = c.execute(PRODUCT_SELECT + f" WHERE p.id IN ({placeholders})", ids).fetchall()
+    by_id = {row["id"]: row for row in rows}
+    return [by_id[i] for i in ids if i in by_id]
+
+
 # --------------------------------------------------------------------- leads
 
 def create_lead(name: str, phone: str, product_id=None, note: str = ""):
@@ -4936,7 +5016,18 @@ def counts():
                 "SELECT COUNT(*) FROM leads WHERE status='moi'"
             ).fetchone()[0],
             "articles": c.execute("SELECT COUNT(*) FROM articles").fetchone()[0],
+            "articles_pending": c.execute(
+                "SELECT COUNT(*) FROM articles WHERE published = 0"
+            ).fetchone()[0],
         }
+
+
+def list_pending_articles(limit: int = 5):
+    with get_conn() as c:
+        return c.execute(
+            "SELECT * FROM articles WHERE published = 0 ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
 
 
 # ------------------------------------------------------------------ articles
@@ -4974,11 +5065,14 @@ def create_article(data: dict) -> int:
         slug = unique_slug(c, "articles", data["title"])
         cur = c.execute(
             """INSERT INTO articles (title, slug, image, excerpt, content, category,
-               published, created_at) VALUES (?,?,?,?,?,?,?,?)""",
+               published, meta_title, meta_description, keyword, related_product_ids,
+               created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 data["title"], slug, data.get("image", ""), data.get("excerpt", ""),
                 data.get("content", ""), data.get("category", "Kiến thức tiêu dùng"),
-                data.get("published", 1), datetime.utcnow().isoformat(),
+                data.get("published", 1), data.get("meta_title", ""),
+                data.get("meta_description", ""), data.get("keyword", ""),
+                data.get("related_product_ids", ""), datetime.utcnow().isoformat(),
             ),
         )
         return cur.lastrowid
@@ -4987,10 +5081,13 @@ def create_article(data: dict) -> int:
 def update_article(article_id: int, data: dict):
     with get_conn() as c:
         slug = unique_slug(c, "articles", data["title"], exclude_id=article_id)
-        fields = ["title=?", "slug=?", "excerpt=?", "content=?", "category=?", "published=?"]
+        fields = ["title=?", "slug=?", "excerpt=?", "content=?", "category=?", "published=?",
+                   "meta_title=?", "meta_description=?", "keyword=?", "related_product_ids=?"]
         params = [
             data["title"], slug, data.get("excerpt", ""), data.get("content", ""),
             data.get("category", "Kiến thức tiêu dùng"), data.get("published", 1),
+            data.get("meta_title", ""), data.get("meta_description", ""),
+            data.get("keyword", ""), data.get("related_product_ids", ""),
         ]
         if data.get("image"):
             fields.append("image=?")
@@ -5002,3 +5099,98 @@ def update_article(article_id: int, data: dict):
 def delete_article(article_id: int):
     with get_conn() as c:
         c.execute("DELETE FROM articles WHERE id = ?", (article_id,))
+
+
+# --------------------------------------------------------------- content_queue
+
+def list_queue():
+    with get_conn() as c:
+        return c.execute(
+            """SELECT q.*, c.name AS category_name, a.slug AS article_slug
+               FROM content_queue q
+               LEFT JOIN categories c ON c.id = q.category_id
+               LEFT JOIN articles a ON a.id = q.article_id
+               ORDER BY q.created_at DESC"""
+        ).fetchall()
+
+
+def create_queue_item(data: dict) -> int:
+    with get_conn() as c:
+        cur = c.execute(
+            """INSERT INTO content_queue (category_id, product_ids, keyword, content_type,
+               notes, status, created_at) VALUES (?,?,?,?,?,'cho_xu_ly',?)""",
+            (
+                data.get("category_id"), data.get("product_ids", ""), data["keyword"],
+                data.get("content_type", "huong_dan"), data.get("notes", ""),
+                datetime.utcnow().isoformat(),
+            ),
+        )
+        return cur.lastrowid
+
+
+def update_queue_item(queue_id: int, data: dict):
+    with get_conn() as c:
+        fields, params = [], []
+        for col in ("status", "article_id", "error"):
+            if col in data:
+                fields.append(f"{col}=?")
+                params.append(data[col])
+        if not fields:
+            return
+        params.append(queue_id)
+        c.execute(f"UPDATE content_queue SET {', '.join(fields)} WHERE id=?", params)
+
+
+def delete_queue_item(queue_id: int):
+    with get_conn() as c:
+        c.execute("DELETE FROM content_queue WHERE id = ?", (queue_id,))
+
+
+def next_pending_queue_item():
+    with get_conn() as c:
+        return c.execute(
+            "SELECT * FROM content_queue WHERE status='cho_xu_ly' ORDER BY created_at LIMIT 1"
+        ).fetchone()
+
+
+def queue_generated_count_since(iso_since: str) -> int:
+    with get_conn() as c:
+        return c.execute(
+            """SELECT COUNT(*) FROM content_queue q
+               JOIN articles a ON a.id = q.article_id
+               WHERE q.status='da_tao' AND a.created_at >= ?""",
+            (iso_since,),
+        ).fetchone()[0]
+
+
+def seed_queue_from_categories() -> int:
+    with get_conn() as c:
+        existing_cats = {
+            row["category_id"] for row in c.execute(
+                "SELECT DISTINCT category_id FROM content_queue WHERE category_id IS NOT NULL"
+            )
+        }
+        cats = c.execute("SELECT * FROM categories ORDER BY sort_order, name").fetchall()
+        added = 0
+        for cat in cats:
+            if cat["id"] in existing_cats:
+                continue
+            products = c.execute(
+                PRODUCT_SELECT + " WHERE p.category_id = ? ORDER BY p.created_at DESC LIMIT 2",
+                (cat["id"],),
+            ).fetchall()
+            product_ids = ",".join(str(p["id"]) for p in products)
+            c.execute(
+                """INSERT INTO content_queue (category_id, product_ids, keyword, content_type,
+                   notes, status, created_at) VALUES (?,?,?,?,?,'cho_xu_ly',?)""",
+                (
+                    cat["id"], product_ids,
+                    f"{cat['name']} loại nào tốt, nên mua loại nào",
+                    "huong_dan",
+                    "Chủ đề gợi ý tự động — sửa từ khóa lại cho sát nhu cầu thật trước khi để"
+                    " hệ thống viết bài.",
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            added += 1
+        return added

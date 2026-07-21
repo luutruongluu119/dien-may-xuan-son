@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+{% block title %}Cập nhật giá hàng loạt{% endblock %}
+{% block heading %}Cập nhật giá hàng loạt{% endblock %}
+{% block content %}
+<div class="admin-card">
+  <p class="small-note">Dùng khi nhà cung cấp đổi giá cả loạt (vd "Funiki tăng 50k") — lọc theo danh mục/thương hiệu rồi cộng/trừ 1 số tiền cho tất cả sản phẩm khớp, không cần sửa từng sản phẩm. Nếu sản phẩm đang có giá khuyến mãi, giá khuyến mãi cũng dịch chuyển cùng mức để giữ nguyên số tiền giảm.</p>
+  <form method="post" id="bulk-price-form" onsubmit="return confirmBulkPrice();">
+    <div class="form-row">
+      <label>Danh mục
+        <select name="category_id" id="bp-category">
+          <option value="">— Tất cả danh mục —</option>
+          {% for c in categories %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Thương hiệu
+        <select name="brand_id" id="bp-brand">
+          <option value="">— Tất cả thương hiệu —</option>
+          {% for b in brands %}
+          <option value="{{ b.id }}">{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Số tiền thay đổi (vd <code>50000</code> để tăng 50.000đ, <code>-20000</code> để giảm 20.000đ)
+      <input type="text" name="delta" id="bp-delta" placeholder="50000" required>
+    </label>
+    <p class="small-note" id="bp-preview">Chọn bộ lọc để xem số sản phẩm sẽ bị ảnh hưởng.</p>
+    <button type="submit" class="btn btn-primary">Áp dụng thay đổi giá</button>
+  </form>
+</div>
+
+<script>
+async function refreshPreview() {
+  const categoryId = document.getElementById("bp-category").value;
+  const brandId = document.getElementById("bp-brand").value;
+  const params = new URLSearchParams();
+  if (categoryId) params.set("category_id", categoryId);
+  if (brandId) params.set("brand_id", brandId);
+  const res = await fetch("{{ url_for('admin_api_bulk_price_preview') }}?" + params.toString());
+  const data = await res.json();
+  document.getElementById("bp-preview").textContent = `Sẽ áp dụng cho ${data.count} sản phẩm khớp bộ lọc hiện tại.`;
+}
+document.getElementById("bp-category").addEventListener("change", refreshPreview);
+document.getElementById("bp-brand").addEventListener("change", refreshPreview);
+refreshPreview();
+
+function confirmBulkPrice() {
+  const preview = document.getElementById("bp-preview").textContent;
+  const delta = document.getElementById("bp-delta").value;
+  return confirm(`${preview}\nSố tiền thay đổi: ${delta}\nXác nhận áp dụng?`);
+}
+</script>
+{% endblock %}

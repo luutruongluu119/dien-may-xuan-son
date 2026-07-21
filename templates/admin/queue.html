@@ -1,0 +1,101 @@
+{% extends "admin/base.html" %}
+{% block title %}Hàng đợi chủ đề{% endblock %}
+{% block heading %}Hàng đợi chủ đề ({{ queue|length }}){% endblock %}
+{% block content %}
+<div class="admin-topbar">
+  <form method="post" action="{{ url_for('admin_queue_seed') }}" class="inline-form">
+    <button type="submit" class="btn btn-outline">🤖 Tự động đề xuất chủ đề</button>
+  </form>
+</div>
+
+<div class="admin-card">
+  <p class="small-note">Chủ đề "Chờ xử lý" sẽ được lịch tự động (nếu đã bật ở Cài đặt) lần lượt viết nháp + tạo ảnh — bài tạo ra luôn ở dạng nháp chờ bạn duyệt tại mục Tin tức, không tự đăng thẳng.</p>
+  <table class="admin-table">
+    <thead><tr><th>Từ khóa</th><th>Danh mục</th><th>Loại bài</th><th>Trạng thái</th><th>Bài viết</th><th></th></tr></thead>
+    <tbody>
+      {% for q in queue %}
+      <tr>
+        <td>{{ q.keyword }}</td>
+        <td>{{ q.category_name or '—' }}</td>
+        <td>{{ content_types.get(q.content_type, q.content_type).split(' — ')[0] }}</td>
+        <td>
+          {% if q.status == 'da_tao' %}<span class="tag tag-ok">Đã tạo bài</span>
+          {% elif q.status == 'loi' %}<span class="tag" style="background:#fdecec;color:var(--danger)">Lỗi</span>
+          {% else %}<span class="tag tag-new">Chờ xử lý</span>{% endif %}
+          {% if q.status == 'loi' and q.error %}<div class="small-note">{{ q.error }}</div>{% endif %}
+        </td>
+        <td>{% if q.article_slug %}<a href="{{ url_for('admin_article_edit', article_id=q.article_id) }}">Xem bài</a>{% else %}—{% endif %}</td>
+        <td>
+          <form class="inline-form" method="post" action="{{ url_for('admin_queue_delete', queue_id=q.id) }}"
+                onsubmit="return confirm('Xoá chủ đề này khỏi hàng đợi?');">
+            <button type="submit" class="btn" style="padding:0;background:none;color:var(--danger);font-weight:600">Xoá</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">Hàng đợi đang trống — bấm "Tự động đề xuất chủ đề" hoặc thêm thủ công bên dưới.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="admin-card">
+  <h3 style="margin-top:0">+ Thêm chủ đề thủ công</h3>
+  <form method="post" action="{{ url_for('admin_queue_new') }}">
+    <div class="form-row">
+      <label>Loại bài
+        <select name="content_type">
+          {% for key, label in content_types.items() %}
+          <option value="{{ key }}">{{ label.split(' — ')[0] }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Danh mục liên quan
+        <select name="category_id">
+          <option value="">— Không chọn —</option>
+          {% for c in categories %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Từ khóa mục tiêu (bắt buộc)<input type="text" name="keyword" required placeholder="vd: máy giặt cửa ngang loại nào bền"></label>
+    <label>Ghi chú thêm (không bắt buộc)<input type="text" name="notes"></label>
+    <label>Sản phẩm liên quan (chọn tối đa 4, gõ để lọc)
+      <input type="text" id="q-product-filter" placeholder="Gõ tên sản phẩm để lọc...">
+    </label>
+    <div id="q-product-list" class="ai-product-list"></div>
+    <input type="hidden" id="q-related-product-ids" name="product_ids" value="">
+    <button type="submit" class="btn btn-primary">+ Thêm vào hàng đợi</button>
+  </form>
+</div>
+
+<script>
+const Q_PRODUCTS = {{ products_for_ai|tojson }};
+let qSelected = new Set();
+
+function qRenderProductList() {
+  const q = document.getElementById("q-product-filter").value.trim().toLowerCase();
+  const box = document.getElementById("q-product-list");
+  const matches = Q_PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q)).slice(0, 40);
+  box.innerHTML = matches.map(p => {
+    const checked = qSelected.has(p.id) ? "checked" : "";
+    return `<label class="ai-product-row"><input type="checkbox" value="${p.id}" ${checked}> ${p.name} <span class="small-note">(${p.category})</span></label>`;
+  }).join("") || '<p class="small-note">Không tìm thấy sản phẩm phù hợp.</p>';
+  box.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const id = Number(cb.value);
+      if (cb.checked) {
+        if (qSelected.size >= 4) { cb.checked = false; return; }
+        qSelected.add(id);
+      } else {
+        qSelected.delete(id);
+      }
+      document.getElementById("q-related-product-ids").value = Array.from(qSelected).join(",");
+    });
+  });
+}
+document.getElementById("q-product-filter").addEventListener("input", qRenderProductList);
+qRenderProductList();
+</script>
+{% endblock %}

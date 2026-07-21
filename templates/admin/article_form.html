@@ -2,9 +2,39 @@
 {% block title %}{{ 'Sửa' if article else 'Viết' }} bài viết{% endblock %}
 {% block heading %}{{ 'Sửa bài viết' if article else 'Viết bài mới' }}{% endblock %}
 {% block content %}
+<div class="admin-card ai-panel">
+  <h3 style="margin-top:0">🤖 AI hỗ trợ viết nháp</h3>
+  <p class="small-note">Chọn danh mục/sản phẩm thật + từ khóa mục tiêu, AI sẽ viết nháp — bạn xem lại và sửa trước khi đăng, hệ thống không tự động đăng bài.</p>
+  <div class="form-row">
+    <label>Loại bài
+      <select id="ai-content-type">
+        {% for key, label in content_types.items() %}
+        <option value="{{ key }}">{{ label.split(' — ')[0] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Danh mục liên quan
+      <select id="ai-category">
+        <option value="">— Không chọn —</option>
+        {% for c in categories %}
+        <option value="{{ c.name }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <label>Từ khóa mục tiêu (bắt buộc)<input type="text" id="ai-keyword" placeholder="vd: máy lạnh tiết kiệm điện cho phòng 15m2"></label>
+  <label>Ghi chú thêm cho AI (không bắt buộc)<input type="text" id="ai-notes" placeholder="vd: nhấn mạnh lắp đặt miễn phí nội thành"></label>
+  <label>Sản phẩm liên quan (chọn tối đa 4, gõ để lọc)
+    <input type="text" id="ai-product-filter" placeholder="Gõ tên sản phẩm để lọc...">
+  </label>
+  <div id="ai-product-list" class="ai-product-list"></div>
+  <button type="button" class="btn btn-primary" id="ai-generate-btn">✨ Tạo nháp bằng AI</button>
+  <p class="small-note" id="ai-status"></p>
+</div>
+
 <form class="admin-card" method="post" enctype="multipart/form-data">
   <div class="form-row">
-    <label>Tiêu đề<input type="text" name="title" required value="{{ article.title if article else '' }}"></label>
+    <label>Tiêu đề<input type="text" id="f-title" name="title" required value="{{ article.title if article else '' }}"></label>
     <label>Ảnh đại diện<input type="file" name="image" accept="image/*"></label>
   </div>
   <div class="form-row">
@@ -13,11 +43,79 @@
       <span><input type="checkbox" name="published" style="width:auto;display:inline" {{ 'checked' if not article or article.published }}> Đăng công khai</span>
     </label>
   </div>
-  <label>Mô tả ngắn (hiển thị ở danh sách)<input type="text" name="excerpt" value="{{ article.excerpt if article else '' }}"></label>
+  <label>Mô tả ngắn (hiển thị ở danh sách)<input type="text" id="f-excerpt" name="excerpt" value="{{ article.excerpt if article else '' }}"></label>
   <label>Nội dung bài viết (mỗi dòng trống là 1 đoạn văn mới)
-    <textarea name="content" rows="10">{{ article.content if article else '' }}</textarea>
+    <textarea id="f-content" name="content" rows="10">{{ article.content if article else '' }}</textarea>
   </label>
+  <div class="form-row">
+    <label>Meta title SEO (để trống sẽ dùng tiêu đề)<input type="text" id="f-meta-title" name="meta_title" maxlength="70" value="{{ article.meta_title if article else '' }}"></label>
+    <label>Từ khóa mục tiêu<input type="text" id="f-keyword" name="keyword" value="{{ article.keyword if article else '' }}"></label>
+  </div>
+  <label>Meta description SEO (để trống sẽ dùng mô tả ngắn)<input type="text" id="f-meta-description" name="meta_description" maxlength="170" value="{{ article.meta_description if article else '' }}"></label>
+  <input type="hidden" id="f-related-product-ids" name="related_product_ids" value="{{ article.related_product_ids if article else '' }}">
   <button type="submit" class="btn btn-primary">{{ 'Lưu thay đổi' if article else 'Đăng bài' }}</button>
   <a href="{{ url_for('admin_articles') }}" class="btn btn-outline">Huỷ</a>
 </form>
+
+<script>
+const AI_PRODUCTS = {{ products_for_ai|tojson }};
+let aiSelected = new Set(
+  ("{{ article.related_product_ids if article else '' }}".split(",").filter(Boolean).map(Number))
+);
+
+function renderProductList() {
+  const q = document.getElementById("ai-product-filter").value.trim().toLowerCase();
+  const box = document.getElementById("ai-product-list");
+  const matches = AI_PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q)).slice(0, 40);
+  box.innerHTML = matches.map(p => {
+    const checked = aiSelected.has(p.id) ? "checked" : "";
+    return `<label class="ai-product-row"><input type="checkbox" value="${p.id}" ${checked}> ${p.name} <span class="small-note">(${p.category})</span></label>`;
+  }).join("") || '<p class="small-note">Không tìm thấy sản phẩm phù hợp.</p>';
+  box.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const id = Number(cb.value);
+      if (cb.checked) {
+        if (aiSelected.size >= 4) { cb.checked = false; return; }
+        aiSelected.add(id);
+      } else {
+        aiSelected.delete(id);
+      }
+    });
+  });
+}
+document.getElementById("ai-product-filter").addEventListener("input", renderProductList);
+renderProductList();
+
+document.getElementById("ai-generate-btn").addEventListener("click", async () => {
+  const keyword = document.getElementById("ai-keyword").value.trim();
+  const status = document.getElementById("ai-status");
+  if (!keyword) { status.textContent = "Vui lòng nhập từ khóa mục tiêu."; return; }
+  status.textContent = "Đang tạo nháp, vui lòng đợi (10-30 giây)...";
+  try {
+    const res = await fetch("{{ url_for('admin_api_generate_article') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        content_type: document.getElementById("ai-content-type").value,
+        category_name: document.getElementById("ai-category").value,
+        keyword: keyword,
+        notes: document.getElementById("ai-notes").value.trim(),
+        product_ids: Array.from(aiSelected),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = "Lỗi: " + (data.error || "không rõ nguyên nhân"); return; }
+    document.getElementById("f-title").value = data.title || "";
+    document.getElementById("f-excerpt").value = data.excerpt || "";
+    document.getElementById("f-content").value = data.content || "";
+    document.getElementById("f-meta-title").value = data.meta_title || "";
+    document.getElementById("f-meta-description").value = data.meta_description || "";
+    document.getElementById("f-keyword").value = data.keyword || keyword;
+    document.getElementById("f-related-product-ids").value = data.related_product_ids || "";
+    status.textContent = "Đã tạo nháp — xem lại nội dung bên dưới và sửa trước khi đăng.";
+  } catch (err) {
+    status.textContent = "Lỗi kết nối: " + err;
+  }
+});
+</script>
 {% endblock %}

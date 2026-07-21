@@ -34,3 +34,26 @@
     if (e.key === "Escape") closeModal();
   });
 })();
+
+(function () {
+  document.querySelectorAll("[data-tabs]").forEach(function (tabRow) {
+    var grid = tabRow.closest("section").querySelector("[data-tab-grid]");
+    if (!grid) return;
+    var items = grid.querySelectorAll(".tab-item");
+
+    tabRow.querySelectorAll(".catfilter-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        tabRow.querySelectorAll(".catfilter-btn").forEach(function (b) {
+          b.classList.remove("active");
+        });
+        btn.classList.add("active");
+
+        var cat = btn.dataset.cat || "";
+        items.forEach(function (item) {
+          var show = !cat || item.dataset.cat === cat;
+          item.classList.toggle("tab-hidden", !show);
+        });
+      });
+    });
+  });
+})();

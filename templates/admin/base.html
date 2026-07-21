@@ -15,6 +15,7 @@
     <a href="{{ url_for('admin_categories') }}" class="{{ 'active' if request.endpoint=='admin_categories' }}">🗂 Danh mục</a>
     <a href="{{ url_for('admin_brands') }}" class="{{ 'active' if request.endpoint=='admin_brands' }}">🏷 Thương hiệu</a>
     <a href="{{ url_for('admin_articles') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin_article') }}">📰 Tin tức</a>
+    <a href="{{ url_for('admin_queue') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin_queue') }}">🗓 Hàng đợi chủ đề</a>
     <a href="{{ url_for('admin_leads') }}" class="{{ 'active' if request.endpoint=='admin_leads' }}">📞 Yêu cầu liên hệ</a>
     <a href="{{ url_for('admin_settings') }}" class="{{ 'active' if request.endpoint=='admin_settings' }}">⚙ Cài đặt</a>
     <a href="{{ url_for('home') }}" target="_blank">🌐 Xem website</a>

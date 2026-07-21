@@ -6,8 +6,32 @@
   <div class="stat-box"><div class="num">{{ counts.products }}</div>Sản phẩm</div>
   <div class="stat-box"><div class="num">{{ counts.categories }}</div>Danh mục</div>
   <div class="stat-box"><div class="num">{{ counts.articles }}</div>Bài viết</div>
+  <div class="stat-box"><div class="num">{{ counts.articles_pending }}</div>Bài chờ duyệt</div>
   <div class="stat-box"><div class="num">{{ counts.leads_new }}</div>Yêu cầu liên hệ mới</div>
 </div>
+
+{% if pending_articles %}
+<div class="admin-card">
+  <h3 style="margin-top:0">Bài chờ duyệt</h3>
+  <table class="admin-table">
+    <thead><tr><th>Tiêu đề</th><th>Ngày tạo</th><th></th></tr></thead>
+    <tbody>
+      {% for a in pending_articles %}
+      <tr>
+        <td><a href="{{ url_for('admin_article_edit', article_id=a.id) }}">{{ a.title }}</a></td>
+        <td class="muted">{{ a.created_at[:10] }}</td>
+        <td>
+          <a href="{{ url_for('admin_article_edit', article_id=a.id) }}">Sửa</a> ·
+          <form class="inline-form" method="post" action="{{ url_for('admin_article_approve', article_id=a.id) }}">
+            <button type="submit" class="btn" style="padding:0;background:none;color:var(--success);font-weight:600">Duyệt & đăng</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 <div class="admin-card">
   <p>Chào mừng đến trang quản trị <strong>{{ settings.company_name }}</strong>.</p>

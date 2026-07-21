@@ -7,9 +7,11 @@ Chạy:  python app.py   rồi mở http://127.0.0.1:5130
 """
 from __future__ import annotations
 
+import base64
 import os
 import sys
 import uuid
+from datetime import datetime, timedelta
 from urllib.parse import quote as urlquote
 
 from flask import (
@@ -18,6 +20,7 @@ from flask import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import ai
 import db
 
 for _stream in (sys.stdout, sys.stderr):
@@ -27,9 +30,11 @@ for _stream in (sys.stdout, sys.stderr):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "products")
 BRAND_UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "brands")
+ARTICLE_UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "articles")
 try:
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(BRAND_UPLOAD_DIR, exist_ok=True)
+    os.makedirs(ARTICLE_UPLOAD_DIR, exist_ok=True)
 except OSError:
     pass  # read-only filesystem (Vercel) — dirs are already bundled with existing uploads
 ALLOWED_EXT = {"jpg", "jpeg", "png", "webp", "gif", "svg"}
@@ -103,6 +108,107 @@ POLICIES = {
     },
 }
 
+AI_CONTENT_TYPES = {
+    "so_sanh": "So sánh sản phẩm — so sánh trực tiếp các sản phẩm được cung cấp, chỉ rõ sản"
+               " phẩm nào hợp với nhu cầu/ngân sách nào.",
+    "huong_dan": "Hướng dẫn chọn mua — hướng dẫn khách chọn sản phẩm phù hợp trong danh mục,"
+                 " có nhắc tới các sản phẩm cụ thể được cung cấp làm ví dụ minh hoạ.",
+    "faq": "Hỏi đáp — trả lời các câu hỏi khách hay thắc mắc khi mua nhóm sản phẩm này, có"
+           " nhắc tới sản phẩm cụ thể khi phù hợp.",
+}
+
+AI_SYSTEM_TMPL = """Bạn là biên tập viên nội dung SEO tiếng Việt cho "{company}", cửa hàng điện máy tại {address}. Giọng văn thân thiện, đáng tin cậy, không thổi phồng, tuyệt đối không bịa đặt chứng nhận/giải thưởng/lời chứng thực khách hàng không có thật.
+
+Nhiệm vụ: viết 1 bài blog SEO dạng "{content_label}" nhắm tới từ khóa mục tiêu, dựa trên dữ liệu sản phẩm THẬT được cung cấp bên dưới (tên, giá, thông số) — không tự bịa thêm sản phẩm, thông số hay mức giá khác với dữ liệu đã cho.
+
+CHỈ trả về JSON thuần (không bọc ```json, không giải thích gì thêm ngoài JSON), đúng cấu trúc:
+{{
+  "meta_title": "tối đa 60 ký tự, chứa từ khóa mục tiêu",
+  "meta_description": "tối đa 160 ký tự, hấp dẫn, chứa từ khóa mục tiêu",
+  "title": "tiêu đề bài viết (thẻ H1)",
+  "excerpt": "1-2 câu mô tả ngắn, hiển thị ở danh sách bài viết",
+  "content": "nội dung bài viết — xem quy tắc định dạng bắt buộc bên dưới"
+}}
+
+Quy tắc định dạng BẮT BUỘC cho "content" (hệ thống hiển thị parse theo từng dòng, không hỗ trợ markdown):
+- Mỗi dòng là MỘT khối nội dung hoàn chỉnh: hoặc là tiêu đề phụ (bắt đầu bằng "## "), hoặc là MỘT đoạn văn trọn vẹn.
+- TUYỆT ĐỐI không xuống dòng ở giữa một đoạn văn — cả đoạn phải nằm trên đúng 1 dòng duy nhất (có thể dài).
+- Bài nên có 3-4 tiêu đề phụ ("## ...") xen giữa các đoạn văn, tổng cộng khoảng 500-800 chữ.
+- Khi nhắc tới sản phẩm cụ thể, dùng đúng tên sản phẩm đã được cung cấp."""
+
+
+def build_ai_user_message(keyword: str, category_name: str, products, notes: str) -> str:
+    lines = [f"Từ khóa mục tiêu: {keyword}"]
+    if category_name:
+        lines.append(f"Danh mục: {category_name}")
+    if notes:
+        lines.append(f"Ghi chú thêm từ chủ shop: {notes}")
+    if products:
+        lines.append("Sản phẩm thật để nhắc tới trong bài (không bịa thêm sản phẩm khác):")
+        for p in products:
+            price = format_price(p["sale_price"] or p["price"])
+            specs = spec_map(p["specs"])
+            specs_line = "; ".join(f"{k}: {v}" for k, v in list(specs.items())[:6])
+            brand = p["brand_name"] or "đang cập nhật"
+            lines.append(f"- {p['name']} (thương hiệu {brand}, giá {price}): {specs_line}")
+    else:
+        lines.append("Không có sản phẩm cụ thể nào được chọn — viết nội dung tổng quan về danh mục.")
+    return "\n".join(lines)
+
+
+CHAT_SYSTEM_TMPL = """Bạn là trợ lý tư vấn bán hàng của "{company}", cửa hàng điện máy tại {address}, hotline {hotline}. Xưng "shop" hoặc "{company}", gọi khách là "anh/chị". Giọng văn thân thiện, ngắn gọn, tự nhiên như nhân viên tư vấn thật đang nhắn tin — không rao giảng, không liệt kê dài dòng.
+
+QUY TẮC BẮT BUỘC:
+- CHỈ tư vấn dựa trên sản phẩm THẬT trong danh sách "SẢN PHẨM LIÊN QUAN" bên dưới (đúng tên, giá, thông số, link). TUYỆT ĐỐI không bịa thêm sản phẩm, giá hay thông số nào khác.
+- Nếu danh sách rỗng hoặc không có sản phẩm phù hợp với câu hỏi, thành thật nói shop chưa có thông tin chính xác và mời khách gọi hotline {hotline} — KHÔNG đoán hay bịa sản phẩm.
+- Khi nhắc một sản phẩm cụ thể, luôn kèm giá đã có sẵn trong dữ liệu.
+- Trả lời ngắn gọn (khoảng 2-4 câu mỗi lượt). Nếu khách có vẻ muốn mua/đặt hàng, chủ động hỏi xin số điện thoại để shop gọi lại tư vấn kỹ hơn và báo giá lắp đặt.
+- Nếu khách hỏi ngoài chủ đề mua sắm/sản phẩm điện máy, trả lời ngắn gọn rồi nhẹ nhàng lái về việc tư vấn sản phẩm.
+
+DANH MỤC ĐANG BÁN: {categories}
+
+SẢN PHẨM LIÊN QUAN TỚI CÂU HỎI GẦN NHẤT CỦA KHÁCH (dữ liệu thật, đang bán):
+{products_block}"""
+
+
+def build_chat_system(settings: dict, categories, products) -> str:
+    cat_names = ", ".join(c["name"] for c in categories)
+    if products:
+        lines = []
+        for p in products:
+            price = format_price(p["sale_price"] or p["price"])
+            brand = p["brand_name"] or "đang cập nhật"
+            url = url_for("product_page", slug=p["slug"], _external=False)
+            lines.append(f"- {p['name']} (hãng {brand}, danh mục {p['category_name']}, giá {price}): "
+                         f"{p['short_desc'] or ''} — link: {url}")
+        products_block = "\n".join(lines)
+    else:
+        products_block = "(không có sản phẩm nào khớp câu hỏi gần nhất — nói thật với khách, đừng bịa)"
+    return CHAT_SYSTEM_TMPL.format(
+        company=settings["company_name"], address=settings["address"],
+        hotline=settings["hotline"], categories=cat_names, products_block=products_block,
+    )
+
+
+def generate_article_draft(settings: dict, content_type: str, keyword: str,
+                            category_name: str, products, notes: str) -> dict:
+    """Gọi Claude sinh 1 bài nháp. Dùng chung cho route thủ công và job chạy theo lịch.
+    Có thể raise ai.AIError — caller tự quyết định xử lý (báo lỗi cho người dùng hoặc
+    đánh dấu hàng đợi bị lỗi)."""
+    if content_type not in AI_CONTENT_TYPES:
+        content_type = "huong_dan"
+    system = AI_SYSTEM_TMPL.format(
+        company=settings["company_name"], address=settings["address"],
+        content_label=AI_CONTENT_TYPES[content_type],
+    )
+    user_msg = build_ai_user_message(keyword, category_name, products, notes)
+    raw = ai.generate(settings, system, user_msg)
+    draft = ai.extract_json(raw)
+    draft["keyword"] = keyword
+    draft["related_product_ids"] = ",".join(str(p["id"]) for p in products)
+    return draft
+
+
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 try:
     app.json.ensure_ascii = False
@@ -148,6 +254,82 @@ def save_brand_logo(file_storage):
         flash("Bản online không lưu được ảnh upload (chỉ đọc) — sửa ảnh ở máy chủ chính rồi đẩy lại lên GitHub.", "error")
         return None
     return f"uploads/brands/{fname}"
+
+
+def save_generated_image_bytes(mime: str, b64data: str) -> str:
+    ext = {"image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp"}.get(mime, "png")
+    fname = f"{uuid.uuid4().hex}.{ext}"
+    try:
+        with open(os.path.join(ARTICLE_UPLOAD_DIR, fname), "wb") as f:
+            f.write(base64.b64decode(b64data))
+    except OSError:
+        return ""
+    return f"uploads/articles/{fname}"
+
+
+def build_article_image_prompt(title: str, category_name: str) -> str:
+    return (
+        f'Vẽ 1 ảnh bìa minh hoạ cho bài blog điện máy tiếng Việt, chủ đề: "{title}"'
+        f" (danh mục: {category_name or 'đồ điện gia dụng'}). "
+        "Phong cách: ảnh chụp thực tế, sáng, gọn gàng, bối cảnh nhà ở Việt Nam hiện đại — "
+        "ví dụ phòng khách/phòng bếp có sản phẩm điện máy đang sử dụng. "
+        "TUYỆT ĐỐI không vẽ logo, nhãn hiệu hay chữ trên ảnh — đây là ảnh minh hoạ bối cảnh "
+        "sử dụng, không phải ảnh chụp đúng sản phẩm thật của cửa hàng."
+    )
+
+
+def run_scheduled_generation():
+    """Job chạy nền theo lịch: lấy 1 chủ đề chờ xử lý trong hàng đợi, viết nháp + tạo ảnh
+    minh hoạ, lưu thành bài viết chưa đăng (published=0) để chủ shop duyệt sau."""
+    settings = db.load_settings()
+    if not settings.get("schedule_enabled"):
+        return
+    per_week = int(settings.get("schedule_per_week") or 2)
+    since = (datetime.utcnow() - timedelta(days=7)).isoformat()
+    if db.queue_generated_count_since(since) >= per_week:
+        return
+    item = db.next_pending_queue_item()
+    if not item:
+        return
+
+    product_ids = [int(i) for i in (item["product_ids"] or "").split(",") if i.strip().isdigit()]
+    products = db.get_products_by_ids(product_ids)
+    category_name = ""
+    if item["category_id"]:
+        cat = next((c for c in db.list_categories() if c["id"] == item["category_id"]), None)
+        category_name = cat["name"] if cat else ""
+
+    try:
+        draft = generate_article_draft(
+            settings, item["content_type"], item["keyword"], category_name, products,
+            item["notes"] or "",
+        )
+    except ai.AIError as e:
+        db.update_queue_item(item["id"], {"status": "loi", "error": str(e)})
+        return
+
+    image_path = ""
+    if (settings.get("gemini_key") or "").strip():
+        try:
+            prompt = build_article_image_prompt(draft.get("title") or item["keyword"], category_name)
+            img = ai.generate_image(settings, prompt)
+            image_path = save_generated_image_bytes(img["mime"], img["data"])
+        except ai.AIError:
+            pass  # không có ảnh vẫn đăng nháp được, không chặn cả bài viết
+
+    article_id = db.create_article({
+        "title": draft.get("title") or item["keyword"],
+        "image": image_path,
+        "excerpt": draft.get("excerpt", ""),
+        "content": draft.get("content", ""),
+        "category": category_name or "Kiến thức tiêu dùng",
+        "published": 0,
+        "meta_title": draft.get("meta_title", ""),
+        "meta_description": draft.get("meta_description", ""),
+        "keyword": draft.get("keyword", item["keyword"]),
+        "related_product_ids": draft.get("related_product_ids", ""),
+    })
+    db.update_queue_item(item["id"], {"status": "da_tao", "article_id": article_id})
 
 
 def parse_specs(text: str):
@@ -225,7 +407,7 @@ def login_required(view):
 
 @app.route("/")
 def home():
-    featured, _ = db.list_products(featured=True, per_page=8)
+    featured, _ = db.list_products(featured=True, per_page=12)
     latest, _ = db.list_products(sort="new", per_page=8)
     articles = db.list_articles(limit=5)
     brands = db.list_brands()
@@ -243,24 +425,13 @@ def home():
 
     washer_slug = db.slugify("Máy giặt")
     heater_slug = db.slugify("Bình nóng lạnh")
-    fridge_slug = db.slugify("Tủ lạnh")
-    tivi_slug = db.slugify("Tivi")
     washer_products, _ = db.list_products(category_slug=washer_slug, per_page=4)
     heater_products, _ = db.list_products(category_slug=heater_slug, per_page=4)
-
-    ac_all_slugs = [db.slugify(n) for n in AC_CATEGORY_NAMES]
-    brand_groups = [
-        ("Thương hiệu điều hòa", db.list_brands_for_categories(ac_all_slugs), ac_slug),
-        ("Thương hiệu tủ lạnh", db.list_brands_for_category(fridge_slug), fridge_slug),
-        ("Thương hiệu máy giặt", db.list_brands_for_category(washer_slug), washer_slug),
-        ("Thương hiệu bình nóng lạnh", db.list_brands_for_category(heater_slug), heater_slug),
-        ("Thương hiệu tivi", db.list_brands_for_category(tivi_slug), tivi_slug),
-    ]
-    brand_groups = [g for g in brand_groups if g[1]]
+    deal_products, _ = db.list_products(on_sale=True, sort="discount", per_page=4)
 
     return render_template(
         "home.html", featured=featured, latest=latest, brands=brands,
-        brand_groups=brand_groups,
+        deal_products=deal_products,
         articles=articles, ac_blocks=ac_blocks, ac_category_slug=ac_slug,
         washer_products=washer_products, washer_slug=washer_slug,
         heater_products=heater_products, heater_slug=heater_slug,
@@ -377,7 +548,11 @@ def article_detail_page(slug):
     if not article or not article["published"]:
         abort(404)
     others = [a for a in db.list_articles(limit=5) if a["id"] != article["id"]][:4]
-    return render_template("article_detail.html", article=article, others=others)
+    related_ids = [int(i) for i in (article["related_product_ids"] or "").split(",") if i.strip().isdigit()]
+    related_products = db.get_products_by_ids(related_ids)
+    return render_template(
+        "article_detail.html", article=article, others=others, related_products=related_products,
+    )
 
 
 @app.route("/chinh-sach/<slug>")
@@ -432,6 +607,39 @@ def submit_lead():
     return redirect(back)
 
 
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    payload = request.get_json(silent=True) or {}
+    history = payload.get("history") or []
+    if not isinstance(history, list) or not history:
+        return {"error": "Thiếu nội dung tin nhắn."}, 400
+    last_user = ""
+    for m in reversed(history):
+        if isinstance(m, dict) and m.get("role") == "user":
+            last_user = (m.get("content") or "").strip()
+            break
+    if not last_user:
+        return {"error": "Thiếu nội dung tin nhắn."}, 400
+
+    settings = db.load_settings()
+    if not (settings.get("claude_key") or "").strip():
+        return {"error": "Chat AI chưa được bật — chủ shop cần dán Claude API key trong Cài đặt."}, 400
+
+    messages = [
+        {"role": m["role"], "content": m["content"]}
+        for m in history
+        if isinstance(m, dict) and m.get("role") in ("user", "assistant") and m.get("content")
+    ][-16:]
+    products = db.search_products_for_chat(last_user, limit=6)
+    system = build_chat_system(settings, g.nav_categories, products)
+    try:
+        reply = ai.generate(settings, system, last_user, messages=messages, max_tokens=1024)
+    except ai.AIError as e:
+        print(f"[api_chat] AIError: {e}", file=sys.stderr)
+        return {"error": f"Xin lỗi, trợ lý AI đang gặp sự cố kỹ thuật. Anh/chị vui lòng gọi hotline {settings['hotline']} để được tư vấn ngay ạ."}, 400
+    return {"reply": reply}
+
+
 # -------------------------------------------------------------------- admin
 
 @app.route("/admin/login", methods=["GET", "POST"])
@@ -458,7 +666,9 @@ def admin_logout():
 @app.route("/admin")
 @login_required
 def admin_dashboard():
-    return render_template("admin/dashboard.html", counts=db.counts())
+    return render_template(
+        "admin/dashboard.html", counts=db.counts(), pending_articles=db.list_pending_articles(),
+    )
 
 
 @app.route("/admin/san-pham")
@@ -536,6 +746,36 @@ def admin_product_delete(product_id):
     return redirect(url_for("admin_products"))
 
 
+@app.route("/admin/san-pham/gia-hang-loat", methods=["GET", "POST"])
+@login_required
+def admin_bulk_price():
+    if request.method == "POST":
+        category_id = request.form.get("category_id", type=int) or None
+        brand_id = request.form.get("brand_id", type=int) or None
+        try:
+            delta = int(request.form.get("delta", "0").strip().replace(".", "").replace(" ", ""))
+        except ValueError:
+            delta = 0
+        if not delta:
+            flash("Vui lòng nhập số tiền thay đổi khác 0 (vd 50000 hoặc -20000).", "error")
+        else:
+            count = db.bulk_adjust_price(category_id, brand_id, delta)
+            flash(f"Đã cập nhật giá cho {count} sản phẩm.", "success")
+        return redirect(url_for("admin_bulk_price"))
+    return render_template(
+        "admin/bulk_price.html", categories=db.list_categories(), brands=db.list_brands(),
+    )
+
+
+@app.route("/admin/api/gia-hang-loat/xem-truoc")
+@login_required
+def admin_api_bulk_price_preview():
+    category_id = request.args.get("category_id", type=int) or None
+    brand_id = request.args.get("brand_id", type=int) or None
+    count = db.count_products_for_filter(category_id, brand_id)
+    return {"count": count}
+
+
 @app.route("/admin/danh-muc", methods=["GET", "POST"])
 @login_required
 def admin_categories():
@@ -610,6 +850,18 @@ def admin_articles():
     return render_template("admin/articles.html", articles=db.list_articles_admin())
 
 
+def _article_form_context():
+    products = db.list_all_products_admin()
+    return {
+        "categories": db.list_categories(),
+        "products_for_ai": [
+            {"id": p["id"], "name": p["name"], "category": p["category_name"]}
+            for p in products
+        ],
+        "content_types": AI_CONTENT_TYPES,
+    }
+
+
 @app.route("/admin/tin-tuc/moi", methods=["GET", "POST"])
 @login_required
 def admin_article_new():
@@ -622,11 +874,17 @@ def admin_article_new():
             "content": request.form.get("content", "").strip(),
             "category": request.form.get("category", "Kiến thức tiêu dùng").strip(),
             "published": 1 if request.form.get("published") else 0,
+            "meta_title": request.form.get("meta_title", "").strip(),
+            "meta_description": request.form.get("meta_description", "").strip(),
+            "keyword": request.form.get("keyword", "").strip(),
+            "related_product_ids": request.form.get("related_product_ids", "").strip(),
         }
         db.create_article(data)
+        if os.environ.get("VERCEL"):
+            flash("Lưu ý: bản online không lưu bài viết vĩnh viễn (mất khi server khởi động lại) — nên tạo/duyệt bài ở máy local rồi deploy lại.", "error")
         flash("Đã đăng bài viết.", "success")
         return redirect(url_for("admin_articles"))
-    return render_template("admin/article_form.html", article=None)
+    return render_template("admin/article_form.html", article=None, **_article_form_context())
 
 
 @app.route("/admin/tin-tuc/<int:article_id>/sua", methods=["GET", "POST"])
@@ -643,13 +901,43 @@ def admin_article_edit(article_id):
             "content": request.form.get("content", "").strip(),
             "category": request.form.get("category", "Kiến thức tiêu dùng").strip(),
             "published": 1 if request.form.get("published") else 0,
+            "meta_title": request.form.get("meta_title", "").strip(),
+            "meta_description": request.form.get("meta_description", "").strip(),
+            "keyword": request.form.get("keyword", "").strip(),
+            "related_product_ids": request.form.get("related_product_ids", "").strip(),
         }
         if image:
             data["image"] = image
         db.update_article(article_id, data)
+        if os.environ.get("VERCEL"):
+            flash("Lưu ý: bản online không lưu bài viết vĩnh viễn (mất khi server khởi động lại) — nên tạo/duyệt bài ở máy local rồi deploy lại.", "error")
         flash("Đã cập nhật bài viết.", "success")
         return redirect(url_for("admin_articles"))
-    return render_template("admin/article_form.html", article=article)
+    return render_template("admin/article_form.html", article=article, **_article_form_context())
+
+
+@app.route("/admin/api/generate-article", methods=["POST"])
+@login_required
+def admin_api_generate_article():
+    payload = request.get_json(silent=True) or {}
+    content_type = payload.get("content_type") or "huong_dan"
+    keyword = (payload.get("keyword") or "").strip()
+    if not keyword:
+        return {"error": "Vui lòng nhập từ khóa mục tiêu trước khi tạo nháp."}, 400
+    category_name = (payload.get("category_name") or "").strip()
+    notes = (payload.get("notes") or "").strip()
+    try:
+        product_ids = [int(i) for i in (payload.get("product_ids") or [])][:4]
+    except (TypeError, ValueError):
+        product_ids = []
+
+    products = db.get_products_by_ids(product_ids)
+    settings = db.load_settings()
+    try:
+        draft = generate_article_draft(settings, content_type, keyword, category_name, products, notes)
+    except ai.AIError as e:
+        return {"error": str(e)}, 400
+    return draft
 
 
 @app.route("/admin/tin-tuc/<int:article_id>/xoa", methods=["POST"])
@@ -658,6 +946,72 @@ def admin_article_delete(article_id):
     db.delete_article(article_id)
     flash("Đã xoá bài viết.", "success")
     return redirect(url_for("admin_articles"))
+
+
+@app.route("/admin/tin-tuc/<int:article_id>/duyet", methods=["POST"])
+@login_required
+def admin_article_approve(article_id):
+    article = db.get_article(article_id)
+    if not article:
+        abort(404)
+    db.update_article(article_id, {
+        "title": article["title"], "excerpt": article["excerpt"], "content": article["content"],
+        "category": article["category"], "published": 1,
+        "meta_title": article["meta_title"], "meta_description": article["meta_description"],
+        "keyword": article["keyword"], "related_product_ids": article["related_product_ids"],
+    })
+    flash("Đã duyệt & đăng bài viết.", "success")
+    return redirect(request.referrer or url_for("admin_articles"))
+
+
+@app.route("/admin/hang-doi")
+@login_required
+def admin_queue():
+    return render_template(
+        "admin/queue.html", queue=db.list_queue(),
+        categories=db.list_categories(), content_types=AI_CONTENT_TYPES,
+        products_for_ai=[
+            {"id": p["id"], "name": p["name"], "category": p["category_name"]}
+            for p in db.list_all_products_admin()
+        ],
+    )
+
+
+@app.route("/admin/hang-doi/de-xuat", methods=["POST"])
+@login_required
+def admin_queue_seed():
+    added = db.seed_queue_from_categories()
+    if added:
+        flash(f"Đã đề xuất thêm {added} chủ đề mới — nhớ xem lại từ khóa trước khi để hệ thống viết bài.", "success")
+    else:
+        flash("Không có danh mục nào cần đề xuất thêm (mỗi danh mục đã có ít nhất 1 chủ đề trong hàng đợi).", "success")
+    return redirect(url_for("admin_queue"))
+
+
+@app.route("/admin/hang-doi/moi", methods=["POST"])
+@login_required
+def admin_queue_new():
+    keyword = request.form.get("keyword", "").strip()
+    if not keyword:
+        flash("Vui lòng nhập từ khóa cho chủ đề.", "error")
+        return redirect(url_for("admin_queue"))
+    db.create_queue_item({
+        "category_id": request.form.get("category_id", type=int) or None,
+        "product_ids": request.form.get("product_ids", "").strip(),
+        "keyword": keyword,
+        "content_type": request.form.get("content_type", "huong_dan"),
+        "notes": request.form.get("notes", "").strip(),
+    })
+    flash("Đã thêm chủ đề vào hàng đợi.", "success")
+    return redirect(url_for("admin_queue"))
+
+
+@app.route("/admin/hang-doi/<int:queue_id>/xoa", methods=["POST"])
+@login_required
+def admin_queue_delete(queue_id):
+    db.delete_queue_item(queue_id)
+    flash("Đã xoá chủ đề khỏi hàng đợi.", "success")
+    return redirect(url_for("admin_queue"))
 
 
 @app.route("/admin/cai-dat", methods=["GET", "POST"])
@@ -673,6 +1027,13 @@ def admin_settings():
         s["youtube"] = request.form.get("youtube", "").strip()
         s["zalo"] = request.form.get("zalo", "").strip()
         s["email"] = request.form.get("email", "").strip()
+        s["fb_page_id"] = request.form.get("fb_page_id", "").strip()
+        s["claude_key"] = request.form.get("claude_key", s.get("claude_key", "")).strip()
+        s["claude_model"] = request.form.get("claude_model", s.get("claude_model", "")).strip() or ai.DEFAULT_CLAUDE_MODEL
+        s["gemini_key"] = request.form.get("gemini_key", s.get("gemini_key", "")).strip()
+        s["schedule_per_week"] = request.form.get("schedule_per_week", type=int) or s.get("schedule_per_week", 2)
+        if "ai_config_submitted" in request.form:
+            s["schedule_enabled"] = bool(request.form.get("schedule_enabled"))
         new_password = request.form.get("new_password", "").strip()
         if new_password:
             s["admin_password_hash"] = generate_password_hash(new_password)
@@ -680,6 +1041,19 @@ def admin_settings():
         flash("Đã lưu cài đặt.", "success")
         return redirect(url_for("admin_settings"))
     return render_template("admin/settings.html", s=s)
+
+
+# Lịch tự động chỉ chạy khi đây là 1 tiến trình sống lâu dài (VPS, không phải Vercel
+# serverless) — trên serverless mỗi request có thể là 1 cold start riêng nên không có
+# chỗ để giữ 1 tiến trình nền chạy liên tục.
+if not os.environ.get("VERCEL"):
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        _scheduler = BackgroundScheduler(timezone="Asia/Ho_Chi_Minh")
+        _scheduler.add_job(run_scheduled_generation, "cron", hour=8, minute=0, id="seo_auto_generate")
+        _scheduler.start()
+    except ImportError:
+        pass  # chưa cài APScheduler (pip install APScheduler) — lịch tự động chưa hoạt động
 
 
 if __name__ == "__main__":

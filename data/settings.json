@@ -5,8 +5,14 @@
   "tagline": "Điện máy chính hãng — giá kho, giao lắp tận nơi",
   "facebook": "https://www.facebook.com/tongkhoXUANSON",
   "youtube": "",
-  "zalo": "",
+  "zalo": "0966092261",
   "email": "humour119@gmail.com",
   "admin_username": "admin",
-  "admin_password_hash": "scrypt:32768:8:1$mRkDqEanN5kHFZF4$fa3ed93432519fb93ce56d1288cc9ade713448b70743258847fd2b91a20ef5a57e8da53774243bf710ad15f6127154e77252a0af3343c20038beb620ebb6869e"
+  "admin_password_hash": "scrypt:32768:8:1$mRkDqEanN5kHFZF4$fa3ed93432519fb93ce56d1288cc9ade713448b70743258847fd2b91a20ef5a57e8da53774243bf710ad15f6127154e77252a0af3343c20038beb620ebb6869e",
+  "claude_key": "",
+  "claude_model": "claude-sonnet-5",
+  "gemini_key": "",
+  "schedule_enabled": false,
+  "schedule_per_week": 2,
+  "fb_page_id": ""
 }

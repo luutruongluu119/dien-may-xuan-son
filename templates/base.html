@@ -1,4 +1,4 @@
-{% from "_macros.html" import cat_icon %}
+{% from "_macros.html" import cat_icon with context %}
 <!doctype html>
 <html lang="vi">
 <head>
@@ -51,7 +51,10 @@
 <div class="topbar">
   <div class="wrap topbar-inner">
     <span>📍 {{ settings.address }}</span>
-    <a href="tel:{{ settings.hotline|replace('.', '') }}" class="topbar-hotline">☎ Hotline: {{ settings.hotline }}</a>
+    <div class="topbar-links">
+      {% if settings.zalo %}<a href="https://zalo.me/{{ settings.zalo }}" target="_blank" rel="noopener">💬 Zalo tư vấn</a>{% endif %}
+      <a href="tel:{{ settings.hotline|replace('.', '') }}" class="topbar-hotline">☎ Hotline: {{ settings.hotline }}</a>
+    </div>
   </div>
 </div>
 
@@ -75,6 +78,7 @@
       {% for c in nav_categories %}
         <a href="{{ url_for('category_page', slug=c.slug) }}">{{ cat_icon(c.icon, c.name) }} {{ c.name }}</a>
       {% endfor %}
+      <a href="{{ url_for('article_list_page') }}">📰 Tin tức</a>
       <a href="{{ url_for('about_page') }}">Giới thiệu &amp; Liên hệ</a>
     </div>
   </nav>
@@ -134,10 +138,75 @@
   <div class="wrap footer-bottom">© {{ settings.company_name }}. Sản phẩm minh hoạ — thông tin thực tế cập nhật khi bổ sung dữ liệu.</div>
 </footer>
 
+{% set is_admin_page = request.path.startswith('/admin') %}
+
 <div class="floating-contact">
   <a href="tel:{{ settings.hotline|replace('.', '') }}" class="floating-btn floating-call" title="Gọi hotline">☎</a>
   {% if settings.zalo %}<a href="https://zalo.me/{{ settings.zalo }}" target="_blank" rel="noopener" class="floating-btn floating-zalo" title="Chat Zalo">💬</a>{% endif %}
+  {% if settings.claude_key and not is_admin_page %}
+  <button type="button" class="floating-btn floating-ai" id="aiChatToggle" title="Hỏi trợ lý AI">🤖</button>
+  {% endif %}
 </div>
+
+{% if settings.claude_key and not is_admin_page %}
+<div class="ai-chat-panel" id="aiChatPanel" aria-hidden="true">
+  <div class="ai-chat-head">
+    <div>
+      <strong>Trợ lý {{ settings.company_name }}</strong>
+      <span class="ai-chat-sub">Hỏi về sản phẩm, giá, tư vấn chọn máy</span>
+    </div>
+    <button type="button" class="ai-chat-close" id="aiChatClose">✕</button>
+  </div>
+  <div class="ai-chat-body" id="aiChatBody">
+    <div class="ai-msg ai-msg-bot">Chào anh/chị 👋 Em là trợ lý của {{ settings.company_name }}. Anh/chị đang cần tư vấn sản phẩm nào ạ? (điều hòa, máy giặt, bình nóng lạnh, tủ lạnh…)</div>
+  </div>
+  <div class="ai-chat-suggest" id="aiChatSuggest">
+    <button type="button" data-q="Tư vấn điều hòa cho phòng 15-20m2">Điều hòa phòng 15-20m2</button>
+    <button type="button" data-q="Bình nóng lạnh loại nào tốt, giá bao nhiêu?">Bình nóng lạnh loại nào tốt?</button>
+    <button type="button" data-q="Xem sản phẩm đang khuyến mãi, giảm giá">Sản phẩm đang giảm giá</button>
+  </div>
+  <form class="ai-chat-input" id="aiChatForm">
+    <input type="text" id="aiChatInput" placeholder="Nhập câu hỏi…" autocomplete="off">
+    <button type="submit" class="btn btn-primary">Gửi</button>
+  </form>
+</div>
+{% endif %}
+
+{% if not is_admin_page %}
+<div class="modal-backdrop" id="giftPopup">
+  <div class="modal">
+    <button type="button" class="modal-close" id="giftPopupClose">✕</button>
+    <h3>🎁 Nhận ưu đãi từ {{ settings.company_name }}</h3>
+    <p class="muted">Để lại số điện thoại — {{ settings.company_name }} tặng ngay ưu đãi lắp đặt và gọi tư vấn chọn đúng sản phẩm, đúng giá kho.</p>
+    <form action="{{ url_for('submit_lead') }}" method="post">
+      <input type="hidden" name="note" value="Đăng ký nhận ưu đãi (popup)">
+      <input type="hidden" name="back" value="{{ request.full_path }}">
+      <label>Họ tên<input type="text" name="name" required></label>
+      <label>Số điện thoại<input type="tel" name="phone" required pattern="[0-9+ ]{8,15}"></label>
+      <button type="submit" class="btn btn-primary btn-block">Nhận ưu đãi ngay</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if settings.fb_page_id and not is_admin_page %}
+<div id="fb-root"></div>
+<div class="fb-customerchat"
+     attribution="biz_inbox"
+     page_id="{{ settings.fb_page_id }}"></div>
+<script>
+  window.fbAsyncInit = function () {
+    FB.init({ xfbml: true, version: 'v19.0' });
+  };
+  (function (d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = 'https://connect.facebook.net/vi_VN/sdk/xfbml.customerchat.js';
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+</script>
+{% endif %}
 
 <div class="modal-backdrop" id="orderModal">
   <div class="modal">
@@ -156,6 +225,8 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% if settings.claude_key and not is_admin_page %}<script src="{{ url_for('static', filename='js/chat.js') }}"></script>{% endif %}
+{% if not is_admin_page %}<script src="{{ url_for('static', filename='js/popup.js') }}"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>
