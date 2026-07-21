@@ -1,0 +1,32 @@
+{% extends "admin/base.html" %}
+{% block title %}Yêu cầu liên hệ{% endblock %}
+{% block heading %}Yêu cầu liên hệ ({{ leads|length }}){% endblock %}
+{% block content %}
+<div class="admin-card">
+  <table class="admin-table">
+    <thead><tr><th>Thời gian</th><th>Họ tên</th><th>Điện thoại</th><th>Sản phẩm</th><th>Ghi chú</th><th>Trạng thái</th></tr></thead>
+    <tbody>
+      {% for l in leads %}
+      <tr>
+        <td class="muted">{{ l.created_at[:16].replace('T',' ') }}</td>
+        <td>{{ l.name }}</td>
+        <td><a href="tel:{{ l.phone }}">{{ l.phone }}</a></td>
+        <td>{{ l.product_name or '—' }}</td>
+        <td class="muted">{{ l.note or '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_lead_status', lead_id=l.id) }}" class="inline-form">
+            <select name="status" onchange="this.form.submit()" style="width:auto;margin:0;font-size:13px">
+              <option value="moi" {{ 'selected' if l.status=='moi' }}>Mới</option>
+              <option value="da_goi" {{ 'selected' if l.status=='da_goi' }}>Đã gọi</option>
+              <option value="xong" {{ 'selected' if l.status=='xong' }}>Hoàn tất</option>
+            </select>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">Chưa có yêu cầu nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

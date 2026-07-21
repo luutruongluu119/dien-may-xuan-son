@@ -1,0 +1,51 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ 'Sửa' if product else 'Thêm' }} sản phẩm{% endblock %}
+{% block heading %}{{ 'Sửa sản phẩm' if product else 'Thêm sản phẩm mới' }}{% endblock %}
+{% block content %}
+<form class="admin-card" method="post" enctype="multipart/form-data">
+  <div class="form-row">
+    <label>Tên sản phẩm<input type="text" name="name" required value="{{ product.name if product else '' }}"></label>
+    <label>Ảnh sản phẩm<input type="file" name="image" accept="image/*"></label>
+  </div>
+
+  <div class="form-row">
+    <label>Danh mục
+      <select name="category_id" required>
+        {% for c in categories %}
+          <option value="{{ c.id }}" {{ 'selected' if product and product.category_id==c.id }}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Thương hiệu
+      <select name="brand_id">
+        <option value="">— Không chọn —</option>
+        {% for b in brands %}
+          <option value="{{ b.id }}" {{ 'selected' if product and product.brand_id==b.id }}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <div class="form-row">
+    <label>Giá gốc (đ)<input type="number" name="price" min="0" required value="{{ product.price if product else '' }}"></label>
+    <label>Giá khuyến mãi (đ, để trống nếu không giảm)<input type="number" name="sale_price" min="0" value="{{ product.sale_price if product and product.sale_price else '' }}"></label>
+  </div>
+
+  <label>Mô tả ngắn<input type="text" name="short_desc" value="{{ product.short_desc if product else '' }}"></label>
+  <label>Mô tả chi tiết<textarea name="description" rows="4">{{ product.description if product else '' }}</textarea></label>
+  <label>Thông số kỹ thuật — mỗi dòng dạng "Tên: Giá trị"
+    <textarea name="specs_text" rows="5" placeholder="Công suất: 9.000 BTU&#10;Loại: 1 chiều, Inverter">{{ specs_text if specs_text else '' }}</textarea>
+  </label>
+
+  <div class="form-row">
+    <label>Bảo hành (tháng)<input type="number" name="warranty_months" min="0" value="{{ product.warranty_months if product else 12 }}"></label>
+    <label style="display:flex;flex-direction:column;justify-content:center;gap:8px">
+      <span><input type="checkbox" name="in_stock" style="width:auto;display:inline" {{ 'checked' if not product or product.in_stock }}> Còn hàng</span>
+      <span><input type="checkbox" name="is_featured" style="width:auto;display:inline" {{ 'checked' if product and product.is_featured }}> Sản phẩm nổi bật</span>
+    </label>
+  </div>
+
+  <button type="submit" class="btn btn-primary">{{ 'Lưu thay đổi' if product else 'Thêm sản phẩm' }}</button>
+  <a href="{{ url_for('admin_products') }}" class="btn btn-outline">Huỷ</a>
+</form>
+{% endblock %}

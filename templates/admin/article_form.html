@@ -1,0 +1,23 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ 'Sửa' if article else 'Viết' }} bài viết{% endblock %}
+{% block heading %}{{ 'Sửa bài viết' if article else 'Viết bài mới' }}{% endblock %}
+{% block content %}
+<form class="admin-card" method="post" enctype="multipart/form-data">
+  <div class="form-row">
+    <label>Tiêu đề<input type="text" name="title" required value="{{ article.title if article else '' }}"></label>
+    <label>Ảnh đại diện<input type="file" name="image" accept="image/*"></label>
+  </div>
+  <div class="form-row">
+    <label>Chuyên mục<input type="text" name="category" value="{{ article.category if article else 'Kiến thức tiêu dùng' }}"></label>
+    <label style="display:flex;flex-direction:column;justify-content:center">
+      <span><input type="checkbox" name="published" style="width:auto;display:inline" {{ 'checked' if not article or article.published }}> Đăng công khai</span>
+    </label>
+  </div>
+  <label>Mô tả ngắn (hiển thị ở danh sách)<input type="text" name="excerpt" value="{{ article.excerpt if article else '' }}"></label>
+  <label>Nội dung bài viết (mỗi dòng trống là 1 đoạn văn mới)
+    <textarea name="content" rows="10">{{ article.content if article else '' }}</textarea>
+  </label>
+  <button type="submit" class="btn btn-primary">{{ 'Lưu thay đổi' if article else 'Đăng bài' }}</button>
+  <a href="{{ url_for('admin_articles') }}" class="btn btn-outline">Huỷ</a>
+</form>
+{% endblock %}

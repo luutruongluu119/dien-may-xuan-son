@@ -1,0 +1,39 @@
+{% extends "admin/base.html" %}
+{% block title %}Sản phẩm{% endblock %}
+{% block heading %}Sản phẩm ({{ products|length }}){% endblock %}
+{% block content %}
+<div class="admin-topbar">
+  <a href="{{ url_for('admin_product_new') }}" class="btn btn-primary">+ Thêm sản phẩm</a>
+</div>
+<div class="admin-card">
+  <table class="admin-table">
+    <thead>
+      <tr><th>Ảnh</th><th>Tên</th><th>Danh mục</th><th>Giá</th><th>Nổi bật</th><th>Kho</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      <tr>
+        <td>
+          {% if p.image %}<img class="thumb" src="{{ url_for('static', filename=p.image) }}" alt="">
+          {% else %}<span class="thumb" style="display:flex;align-items:center;justify-content:center">📦</span>{% endif %}
+        </td>
+        <td><a href="{{ url_for('admin_product_edit', product_id=p.id) }}">{{ p.name }}</a></td>
+        <td>{{ p.category_name }}</td>
+        <td>{{ (p.sale_price or p.price)|price }}{% if p.sale_price %} <span class="muted" style="text-decoration:line-through">{{ p.price|price }}</span>{% endif %}</td>
+        <td>{% if p.is_featured %}<span class="tag tag-ok">Nổi bật</span>{% endif %}</td>
+        <td>{% if p.in_stock %}<span class="tag tag-ok">Còn hàng</span>{% else %}<span class="tag tag-done">Hết hàng</span>{% endif %}</td>
+        <td>
+          <a href="{{ url_for('admin_product_edit', product_id=p.id) }}">Sửa</a> ·
+          <form class="inline-form" method="post" action="{{ url_for('admin_product_delete', product_id=p.id) }}"
+                onsubmit="return confirm('Xoá sản phẩm này?');">
+            <button type="submit" class="btn" style="padding:0;background:none;color:var(--danger);font-weight:600">Xoá</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">Chưa có sản phẩm nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

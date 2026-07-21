@@ -1,0 +1,36 @@
+{% extends "admin/base.html" %}
+{% block title %}Tin tức{% endblock %}
+{% block heading %}Bài viết ({{ articles|length }}){% endblock %}
+{% block content %}
+<div class="admin-topbar">
+  <a href="{{ url_for('admin_article_new') }}" class="btn btn-primary">+ Viết bài mới</a>
+</div>
+<div class="admin-card">
+  <table class="admin-table">
+    <thead><tr><th>Ảnh</th><th>Tiêu đề</th><th>Chuyên mục</th><th>Ngày đăng</th><th>Trạng thái</th><th></th></tr></thead>
+    <tbody>
+      {% for a in articles %}
+      <tr>
+        <td>
+          {% if a.image %}<img class="thumb" src="{{ url_for('static', filename=a.image) }}" alt="">
+          {% else %}<span class="thumb" style="display:flex;align-items:center;justify-content:center">📰</span>{% endif %}
+        </td>
+        <td><a href="{{ url_for('admin_article_edit', article_id=a.id) }}">{{ a.title }}</a></td>
+        <td>{{ a.category }}</td>
+        <td class="muted">{{ a.created_at[:10] }}</td>
+        <td>{% if a.published %}<span class="tag tag-ok">Đã đăng</span>{% else %}<span class="tag tag-done">Nháp</span>{% endif %}</td>
+        <td>
+          <a href="{{ url_for('admin_article_edit', article_id=a.id) }}">Sửa</a> ·
+          <form class="inline-form" method="post" action="{{ url_for('admin_article_delete', article_id=a.id) }}"
+                onsubmit="return confirm('Xoá bài viết này?');">
+            <button type="submit" class="btn" style="padding:0;background:none;color:var(--danger);font-weight:600">Xoá</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">Chưa có bài viết nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

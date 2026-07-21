@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }} — {{ settings.company_name }}{% endblock %}
+{% block meta_description %}{{ article.excerpt or article.title }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_image %}{% if article.image %}{{ url_for('static', filename=article.image, _external=True) }}{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block extra_jsonld %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": {{ article.title|tojson }},
+  "description": {{ (article.excerpt or article.title)|tojson }},
+  "datePublished": {{ article.created_at|tojson }},
+  "author": {"@type": "Organization", "name": {{ settings.company_name|tojson }}},
+  "publisher": {"@type": "Organization", "name": {{ settings.company_name|tojson }},
+    "logo": {"@type": "ImageObject", "url": {{ url_for('static', filename='img/logo-512.png', _external=True)|tojson }}}}
+  {%- if article.image %},"image": [{{ url_for('static', filename=article.image, _external=True)|tojson }}]{% endif %}
+}
+</script>
+{% endblock %}
+{% block content %}
+<div class="wrap section">
+  <nav class="breadcrumb">
+    <a href="{{ url_for('home') }}">Trang chủ</a> ›
+    <a href="{{ url_for('article_list_page') }}">Tin tức</a> ›
+    <span>{{ article.title }}</span>
+  </nav>
+
+  <article class="article-detail">
+    <h1>{{ article.title }}</h1>
+    <p class="muted">{{ article.created_at[:10] }}</p>
+    {% if article.image %}
+      <img src="{{ url_for('static', filename=article.image) }}" alt="{{ article.title }}" class="article-cover">
+    {% endif %}
+    <div class="article-body">
+      {% if article.excerpt %}<p class="article-lead">{{ article.excerpt }}</p>{% endif %}
+      {% for kind, text in article.content|article %}
+        {% if kind == "h3" %}<h2>{{ text }}</h2>{% else %}<p>{{ text }}</p>{% endif %}
+      {% endfor %}
+    </div>
+  </article>
+
+  {% if others %}
+  <section class="section">
+    <h2 class="section-title">Bài viết khác</h2>
+    <div class="news-grid">
+      {% for a in others %}
+      <a href="{{ url_for('article_detail_page', slug=a.slug) }}" class="news-card">
+        <div class="news-thumb">{% if a.image %}<img src="{{ url_for('static', filename=a.image) }}" alt="{{ a.title }}">{% else %}📰{% endif %}</div>
+        <div class="news-body">
+          <h3>{{ a.title }}</h3>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "admin/base.html" %}
+{% block title %}Tổng quan{% endblock %}
+{% block heading %}Tổng quan{% endblock %}
+{% block content %}
+<div class="stat-row">
+  <div class="stat-box"><div class="num">{{ counts.products }}</div>Sản phẩm</div>
+  <div class="stat-box"><div class="num">{{ counts.categories }}</div>Danh mục</div>
+  <div class="stat-box"><div class="num">{{ counts.articles }}</div>Bài viết</div>
+  <div class="stat-box"><div class="num">{{ counts.leads_new }}</div>Yêu cầu liên hệ mới</div>
+</div>
+
+<div class="admin-card">
+  <p>Chào mừng đến trang quản trị <strong>{{ settings.company_name }}</strong>.</p>
+  <p class="small-note">Vào mục <strong>Sản phẩm</strong> để thêm/sửa sản phẩm và tải ảnh thật lên,
+     <strong>Yêu cầu liên hệ</strong> để xem khách đã để lại số điện thoại, và
+     <strong>Cài đặt</strong> để cập nhật thông tin công ty hoặc đổi mật khẩu.</p>
+</div>
+{% endblock %}

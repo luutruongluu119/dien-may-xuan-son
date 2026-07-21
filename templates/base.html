@@ -1,0 +1,161 @@
+{% from "_macros.html" import cat_icon %}
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ settings.company_name }} — {{ settings.tagline }}{% endblock %}</title>
+<meta name="description" content="{% block meta_description %}{{ settings.tagline }}{% endblock %}">
+<link rel="canonical" href="{% block canonical %}{{ request.base_url }}{% endblock %}">
+<meta name="robots" content="index, follow">
+
+<meta property="og:site_name" content="{{ settings.company_name }}">
+<meta property="og:type" content="{% block og_type %}website{% endblock %}">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}">
+<meta property="og:description" content="{% block og_description %}{{ self.meta_description() }}{% endblock %}">
+<meta property="og:url" content="{{ self.canonical() }}">
+<meta property="og:image" content="{% block og_image %}{{ url_for('static', filename='img/logo-512.png', _external=True) }}{% endblock %}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ self.og_title() }}">
+<meta name="twitter:description" content="{{ self.og_description() }}">
+<meta name="twitter:image" content="{{ self.og_image() }}">
+
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='img/logo-192.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "HomeAndConstructionBusiness",
+  "name": {{ settings.company_name|tojson }},
+  "url": {{ url_for('home', _external=True)|tojson }},
+  "logo": {{ url_for('static', filename='img/logo-512.png', _external=True)|tojson }},
+  "image": {{ url_for('static', filename='img/logo-512.png', _external=True)|tojson }},
+  "telephone": {{ settings.hotline|tojson }},
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": {{ settings.address|tojson }},
+    "addressLocality": "Hà Nội",
+    "addressCountry": "VN"
+  }
+  {%- if settings.facebook %},"sameAs": [{{ settings.facebook|tojson }}]{% endif %}
+}
+</script>
+{% block extra_jsonld %}{% endblock %}
+{% block head %}{% endblock %}
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap topbar-inner">
+    <span>📍 {{ settings.address }}</span>
+    <a href="tel:{{ settings.hotline|replace('.', '') }}" class="topbar-hotline">☎ Hotline: {{ settings.hotline }}</a>
+  </div>
+</div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a href="{{ url_for('home') }}" class="brand">
+      <span class="brand-mark">XS</span>
+      <span class="brand-name">{{ settings.company_name }}</span>
+    </a>
+
+    <form class="search-form" action="{{ url_for('search_page') }}" method="get">
+      <input type="text" name="q" placeholder="Tìm điều hòa, máy giặt, tủ lạnh…" value="{{ search_q|default('') }}">
+      <button type="submit" aria-label="Tìm kiếm">🔍</button>
+    </form>
+
+    <a href="tel:{{ settings.hotline|replace('.', '') }}" class="btn btn-gold header-cta">☎ {{ settings.hotline }}</a>
+  </div>
+
+  <nav class="category-nav">
+    <div class="wrap category-nav-inner">
+      {% for c in nav_categories %}
+        <a href="{{ url_for('category_page', slug=c.slug) }}">{{ cat_icon(c.icon, c.name) }} {{ c.name }}</a>
+      {% endfor %}
+      <a href="{{ url_for('about_page') }}">Giới thiệu &amp; Liên hệ</a>
+    </div>
+  </nav>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="wrap flash-wrap">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<main>
+{% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <div>
+      <div class="brand-name footer-brand">{{ settings.company_name }}</div>
+      <p>{{ settings.tagline }}</p>
+      <p>📍 {{ settings.address }}</p>
+      <p>☎ Hotline: <a href="tel:{{ settings.hotline|replace('.', '') }}">{{ settings.hotline }}</a></p>
+      {% if settings.email %}<p>✉ {{ settings.email }}</p>{% endif %}
+    </div>
+    <div>
+      <div class="footer-title">Giới thiệu</div>
+      <ul class="footer-links">
+        <li><a href="{{ url_for('about_page') }}">Giới thiệu về {{ settings.company_name }}</a></li>
+        <li><a href="{{ url_for('about_page') }}#lien-he">Liên hệ</a></li>
+        <li><a href="{{ url_for('about_page') }}#ban-do">Bản đồ đường đi</a></li>
+        <li><a href="{{ url_for('article_list_page') }}">Tin tức</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-title">Chính sách</div>
+      <ul class="footer-links">
+        <li><a href="{{ url_for('policy_page', slug='thanh-toan') }}">Hình thức thanh toán</a></li>
+        <li><a href="{{ url_for('policy_page', slug='van-chuyen') }}">Chính sách vận chuyển</a></li>
+        <li><a href="{{ url_for('policy_page', slug='bao-hanh') }}">Bảo hành đổi trả</a></li>
+        <li><a href="{{ url_for('policy_page', slug='bao-mat') }}">Bảo mật thông tin</a></li>
+        <li><a href="{{ url_for('policy_page', slug='dai-ly') }}">Chính sách ưu đãi đại lý</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-title">Kết nối</div>
+      <ul class="footer-links">
+        {% if settings.facebook %}<li><a href="{{ settings.facebook }}" target="_blank" rel="noopener">Facebook</a></li>{% endif %}
+        {% if settings.youtube %}<li><a href="{{ settings.youtube }}" target="_blank" rel="noopener">YouTube</a></li>{% endif %}
+        {% if not settings.facebook and not settings.youtube %}<li class="muted">Cập nhật sau</li>{% endif %}
+      </ul>
+    </div>
+  </div>
+  <div class="wrap footer-bottom">© {{ settings.company_name }}. Sản phẩm minh hoạ — thông tin thực tế cập nhật khi bổ sung dữ liệu.</div>
+</footer>
+
+<div class="floating-contact">
+  <a href="tel:{{ settings.hotline|replace('.', '') }}" class="floating-btn floating-call" title="Gọi hotline">☎</a>
+  {% if settings.zalo %}<a href="https://zalo.me/{{ settings.zalo }}" target="_blank" rel="noopener" class="floating-btn floating-zalo" title="Chat Zalo">💬</a>{% endif %}
+</div>
+
+<div class="modal-backdrop" id="orderModal">
+  <div class="modal">
+    <button type="button" class="modal-close" id="orderModalClose">✕</button>
+    <h3>Đặt hàng nhanh</h3>
+    <p class="muted" id="orderModalProduct"></p>
+    <form action="{{ url_for('submit_lead') }}" method="post">
+      <input type="hidden" name="product_id" id="orderProductId">
+      <input type="hidden" name="back" id="orderBackUrl">
+      <label>Họ tên<input type="text" name="name" required></label>
+      <label>Số điện thoại<input type="tel" name="phone" required pattern="[0-9+ ]{8,15}"></label>
+      <label>Ghi chú<textarea name="note" rows="2" placeholder="Khu vực, thời gian giao lắp mong muốn…"></textarea></label>
+      <button type="submit" class="btn btn-primary btn-block">Gửi yêu cầu — {{ settings.company_name }} sẽ gọi lại</button>
+    </form>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

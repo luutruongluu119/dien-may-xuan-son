@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% from "_macros.html" import product_card, cat_icon %}
+{% block title %}{{ product.name }} — Giá tốt, giao lắp tận nơi | {{ settings.company_name }}{% endblock %}
+{% block meta_description %}{{ product.short_desc or (product.name ~ ' chính hãng, giá kho, giao lắp tận nơi tại Hà Nội.') }}{% endblock %}
+{% block og_type %}product{% endblock %}
+{% block og_image %}{% if product.image %}{{ url_for('static', filename=product.image, _external=True) }}{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block extra_jsonld %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": {{ product.name|tojson }},
+  "description": {{ (product.short_desc or product.name)|tojson }},
+  {% if product.brand_name -%}"brand": {"@type": "Brand", "name": {{ product.brand_name|tojson }}},{% endif %}
+  {% if product.image -%}"image": [{{ url_for('static', filename=product.image, _external=True)|tojson }}],{% endif %}
+  "sku": "{{ product.id }}",
+  "offers": {
+    "@type": "Offer",
+    "url": {{ request.base_url|tojson }},
+    "priceCurrency": "VND",
+    "price": "{{ product.sale_price or product.price }}",
+    "availability": "https://schema.org/{{ 'InStock' if product.in_stock else 'OutOfStock' }}"
+  }
+}
+</script>
+{% endblock %}
+{% block content %}
+<div class="wrap section">
+
+  <nav class="breadcrumb">
+    <a href="{{ url_for('home') }}">Trang chủ</a> ›
+    <a href="{{ url_for('category_page', slug=product.category_slug) }}">{{ product.category_name }}</a> ›
+    <span>{{ product.name }}</span>
+  </nav>
+
+  <div class="product-layout">
+    <div class="product-gallery">
+      {% if product.image %}
+        <img src="{{ url_for('static', filename=product.image) }}" alt="{{ product.name }}">
+      {% else %}
+        <div class="product-gallery-placeholder">
+          {{ cat_icon(nav_categories|selectattr('slug','equalto',product.category_slug)|map(attribute='icon')|first|default('📦'), product.name) }}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="product-info">
+      {% if product.brand_name %}<span class="card-brand">{{ product.brand_name }}</span>{% endif %}
+      <h1>{{ product.name }}</h1>
+      <p class="muted">{{ product.short_desc }}</p>
+
+      <div class="product-price">
+        <span class="price-now">{{ (product.sale_price or product.price)|price }}</span>
+        {% if product.sale_price %}<span class="price-old">{{ product.price|price }}</span>{% endif %}
+      </div>
+
+      <ul class="product-meta">
+        <li>{{ '✅ Còn hàng' if product.in_stock else '⛔ Tạm hết hàng' }}</li>
+        <li>🛡 Bảo hành {{ product.warranty_months }} tháng chính hãng</li>
+        <li>🚚 Giao &amp; lắp đặt tận nơi tại Hà Nội</li>
+      </ul>
+
+      <button type="button" class="btn btn-primary btn-lg btn-order"
+              data-product-id="{{ product.id }}" data-product-name="{{ product.name }}">Đặt hàng nhanh</button>
+      <a href="tel:{{ settings.hotline|replace('.', '') }}" class="btn btn-outline btn-lg">☎ Gọi {{ settings.hotline }}</a>
+    </div>
+  </div>
+
+  {% if internal_links %}
+  <div class="internal-links">
+    {% for label, href in internal_links %}<a href="{{ href }}">{{ label }}</a>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="product-tabs-layout">
+    <div class="product-tabs">
+      <div class="tabs-nav" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="baiviet">Bài viết</button>
+        <button type="button" class="tab-btn" data-tab="thongso">Thông số kỹ thuật</button>
+        {% if install_pricing %}<button type="button" class="tab-btn" data-tab="giaLapdat">Bảng giá lắp đặt</button>{% endif %}
+      </div>
+
+      <div class="tab-panel active" data-panel="baiviet">
+        <h2 class="section-title">Bài viết {{ product.name }}</h2>
+        {% for kind, text in product.description|article %}
+          {% if kind == 'h3' %}<h3>{{ text }}</h3>{% else %}<p>{{ text }}</p>{% endif %}
+        {% else %}
+          <p>{{ product.short_desc }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="tab-panel" data-panel="thongso">
+        {% set specs = product.specs|specs %}
+        {% if specs %}
+        <table class="spec-table">
+          {% for s in specs %}<tr><th>{{ s.k }}</th><td>{{ s.v }}</td></tr>{% endfor %}
+        </table>
+        {% else %}
+        <p class="muted">Chưa cập nhật thông số chi tiết, vui lòng gọi hotline để được tư vấn.</p>
+        {% endif %}
+      </div>
+
+      {% if install_pricing %}
+      <div class="tab-panel" data-panel="giaLapdat">
+        <table class="spec-table">
+          {% for hang_muc, gia in install_pricing %}<tr><th>{{ hang_muc }}</th><td>{{ gia }}</td></tr>{% endfor %}
+        </table>
+        <p class="muted">Giá lắp đặt tham khảo, có thể thay đổi tuỳ điều kiện thi công thực tế — gọi hotline {{ settings.hotline }} để được báo giá chính xác trước khi lắp.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if related %}
+    <aside class="product-sidebar">
+      <div class="sidebar-title">Có thể bạn quan tâm</div>
+      <div class="sidebar-list">
+        {% for p in related %}{{ product_card(p) }}{% endfor %}
+      </div>
+    </aside>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll(".tab-btn").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.remove("active"); });
+    document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.remove("active"); });
+    btn.classList.add("active");
+    document.querySelector('.tab-panel[data-panel="' + btn.dataset.tab + '"]').classList.add("active");
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "_macros.html" import product_card, brand_grid, cat_icon %}
+{% block content %}
+
+<section class="hero">
+  <div class="wrap hero-inner">
+    <div class="hero-text">
+      <h1>{{ settings.tagline }}</h1>
+      <p>Điều hòa, máy giặt, bình nóng lạnh, tủ lạnh, gia dụng, tivi chính hãng — giá kho, giao lắp tận nơi tại Bắc Từ Liêm &amp; Hà Nội.</p>
+      <a href="tel:{{ settings.hotline|replace('.', '') }}" class="btn btn-gold">☎ Gọi ngay {{ settings.hotline }}</a>
+    </div>
+    <div class="hero-badges">
+      <div class="hero-badge">✅ Hàng chính hãng</div>
+      <div class="hero-badge">🚚 Giao lắp tận nơi</div>
+      <div class="hero-badge">🛡 Bảo hành dài hạn</div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap quick-cats">
+  {% for c in nav_categories %}
+    <a href="{{ url_for('category_page', slug=c.slug) }}" class="quick-cat">
+      <span class="quick-cat-icon">{{ cat_icon(c.icon, c.name) }}</span>{{ c.name }}
+    </a>
+  {% endfor %}
+</div>
+
+{% for title, group_brands, cat_slug in brand_groups %}
+  {{ brand_grid(title, group_brands, cat_slug) }}
+{% endfor %}
+
+{% if articles %}
+<section class="wrap section">
+  <div class="listing-head">
+    <h2 class="section-title">Tin tức nổi bật</h2>
+    <a href="{{ url_for('article_list_page') }}" class="see-more">Xem tất cả tin tức →</a>
+  </div>
+  <div class="news-grid">
+    {% for a in articles %}
+    <a href="{{ url_for('article_detail_page', slug=a.slug) }}" class="news-card">
+      <div class="news-thumb">{% if a.image %}<img src="{{ url_for('static', filename=a.image) }}" alt="{{ a.title }}">{% else %}📰{% endif %}</div>
+      <div class="news-body">
+        <h3>{{ a.title }}</h3>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if featured %}
+<section class="wrap section">
+  <h2 class="section-title">Sản phẩm bán chạy</h2>
+  <div class="grid">
+    {% for p in featured %}{{ product_card(p) }}{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% for block in ac_blocks %}
+<section class="wrap section">
+  <div class="listing-head">
+    <h2 class="section-title">Điều hòa treo tường {{ block.brand.name }}</h2>
+    <a href="{{ url_for('category_page', slug=ac_category_slug, brand=block.brand.id) }}" class="see-more">Xem thêm →</a>
+  </div>
+  <div class="grid">
+    {% for p in block.products %}{{ product_card(p) }}{% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+{% if washer_products %}
+<section class="wrap section">
+  <div class="listing-head">
+    <h2 class="section-title">Máy giặt</h2>
+    <a href="{{ url_for('category_page', slug=washer_slug) }}" class="see-more">Xem thêm →</a>
+  </div>
+  <div class="grid">
+    {% for p in washer_products %}{{ product_card(p) }}{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if heater_products %}
+<section class="wrap section">
+  <div class="listing-head">
+    <h2 class="section-title">Bình nóng lạnh</h2>
+    <a href="{{ url_for('category_page', slug=heater_slug) }}" class="see-more">Xem thêm →</a>
+  </div>
+  <div class="grid">
+    {% for p in heater_products %}{{ product_card(p) }}{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="wrap section why-us">
+  <h2 class="section-title">Vì sao chọn {{ settings.company_name }}?</h2>
+  <div class="why-grid">
+    <div class="why-item"><span class="why-icon">✅</span><h3>Hàng chính hãng</h3><p>Sản phẩm nhập từ nhà phân phối chính hãng, đầy đủ tem bảo hành.</p></div>
+    <div class="why-item"><span class="why-icon">💰</span><h3>Giá kho, không qua trung gian</h3><p>Bán trực tiếp từ kho nên giá luôn cạnh tranh so với thị trường.</p></div>
+    <div class="why-item"><span class="why-icon">🚚</span><h3>Giao lắp tận nơi</h3><p>Đội ngũ kỹ thuật giao hàng và lắp đặt tận nhà tại Hà Nội.</p></div>
+    <div class="why-item"><span class="why-icon">🛡</span><h3>Bảo hành dài hạn</h3><p>Hỗ trợ bảo hành, sửa chữa nhanh chóng trong suốt thời gian sử dụng.</p></div>
+    <div class="why-item"><span class="why-icon">☎</span><h3>Tư vấn tận tâm</h3><p>Gọi hotline được tư vấn chọn đúng sản phẩm phù hợp nhu cầu, ngân sách.</p></div>
+  </div>
+</section>
+
+{% if latest %}
+<section class="wrap section">
+  <h2 class="section-title">Sản phẩm mới nhất</h2>
+  <div class="grid">
+    {% for p in latest %}{{ product_card(p) }}{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}

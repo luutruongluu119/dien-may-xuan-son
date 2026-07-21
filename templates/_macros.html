@@ -1,0 +1,58 @@
+{% macro cat_icon(icon, alt, cls="") %}
+{% if icon and '/' in icon %}
+  <img class="cat-icon-img {{ cls }}" src="{{ url_for('static', filename=icon) }}" alt="{{ alt }}" loading="lazy">
+{% else %}
+  {{ icon|default('📦') }}
+{% endif %}
+{% endmacro %}
+
+{% macro brand_card(b, url) %}
+<a href="{{ url }}" class="brand-card">
+  <span class="brand-card-logo">
+    {% if b.logo %}
+      <img src="{{ url_for('static', filename=b.logo) }}" alt="Logo {{ b.name }}" loading="lazy">
+    {% else %}
+      <span class="brand-card-fallback">{{ b.name[:2]|upper }}</span>
+    {% endif %}
+  </span>
+  <span class="brand-card-name">{{ b.name }}</span>
+</a>
+{% endmacro %}
+
+{% macro brand_grid(title, brands, category_slug) %}
+<section class="wrap section brand-block">
+  <h2 class="section-title">{{ title }}</h2>
+  <div class="brand-grid">
+    {% for b in brands[:15] %}{{ brand_card(b, url_for('category_page', slug=category_slug, brand=b.id)) }}{% endfor %}
+    <a href="{{ url_for('category_page', slug=category_slug) }}" class="brand-card brand-card-more">
+      <span class="brand-card-logo brand-card-more-icon">+</span>
+      <span class="brand-card-name">Xem thêm</span>
+    </a>
+  </div>
+</section>
+{% endmacro %}
+
+{% macro product_card(p) %}
+<div class="card">
+  <a href="{{ url_for('product_page', slug=p.slug) }}" class="card-img">
+    {% if p.image %}
+      <img src="{{ url_for('static', filename=p.image) }}" alt="{{ p.name }}" loading="lazy">
+    {% else %}
+      <span class="card-img-placeholder">{{ cat_icon(nav_categories|selectattr('slug','equalto',p.category_slug)|map(attribute='icon')|first|default('📦'), p.name) }}</span>
+    {% endif %}
+    {% if p.sale_price %}
+      <span class="badge badge-sale">-{{ ((1 - p.sale_price / p.price) * 100)|round|int }}%</span>
+    {% endif %}
+  </a>
+  <div class="card-body">
+    {% if p.brand_name %}<span class="card-brand">{{ p.brand_name }}</span>{% endif %}
+    <a href="{{ url_for('product_page', slug=p.slug) }}" class="card-title">{{ p.name }}</a>
+    <div class="card-price">
+      <span class="price-now">{{ (p.sale_price or p.price)|price }}</span>
+      {% if p.sale_price %}<span class="price-old">{{ p.price|price }}</span>{% endif %}
+    </div>
+    <button type="button" class="btn btn-primary btn-block btn-order"
+            data-product-id="{{ p.id }}" data-product-name="{{ p.name }}">Đặt hàng nhanh</button>
+  </div>
+</div>
+{% endmacro %}

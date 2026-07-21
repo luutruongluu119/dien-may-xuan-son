@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<circle cx="100" cy="100" r="96" fill="#ffffff" stroke="#e4e4e4" stroke-width="2"/>
+<text x="100" y="108" font-family="Arial, Helvetica, sans-serif" font-size="30"
+      font-weight="800" font-style="italic" fill="#E1571C"
+      text-anchor="middle" dominant-baseline="middle">Rossi</text>
+</svg>

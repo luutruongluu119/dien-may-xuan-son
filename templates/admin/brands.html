@@ -1,0 +1,47 @@
+{% extends "admin/base.html" %}
+{% block title %}Thương hiệu{% endblock %}
+{% block heading %}Thương hiệu{% endblock %}
+{% block content %}
+<div class="admin-card">
+  <form method="post" enctype="multipart/form-data" class="form-row">
+    <label>Tên thương hiệu<input type="text" name="name" required></label>
+    <label>Logo (ảnh vuông, nền trong suốt nếu có)<input type="file" name="logo" accept="image/*"></label>
+    <div style="align-self:end"><button type="submit" class="btn btn-primary">+ Thêm thương hiệu</button></div>
+  </form>
+</div>
+<div class="admin-card">
+  <table class="admin-table">
+    <thead><tr><th>Logo</th><th>Tên</th><th>Slug</th><th>Cập nhật logo</th><th></th></tr></thead>
+    <tbody>
+      {% for b in brands %}
+      <tr>
+        <td>
+          {% if b.logo %}
+            <img src="{{ url_for('static', filename=b.logo) }}" alt="{{ b.name }}" style="width:44px;height:44px;object-fit:contain;border:1px solid var(--border);border-radius:50%;background:#fff;padding:4px">
+          {% else %}
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:var(--green-50);color:var(--green-700);font-weight:700;font-size:13px">{{ b.name[:2]|upper }}</span>
+          {% endif %}
+        </td>
+        <td>{{ b.name }}</td>
+        <td class="muted">{{ b.slug }}</td>
+        <td>
+          <form class="inline-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_brand_edit', brand_id=b.id) }}" style="display:flex;gap:6px;align-items:center">
+            <input type="hidden" name="name" value="{{ b.name }}">
+            <input type="file" name="logo" accept="image/*" style="max-width:180px">
+            <button type="submit" class="btn" style="padding:6px 10px">Lưu logo</button>
+          </form>
+        </td>
+        <td>
+          <form class="inline-form" method="post" action="{{ url_for('admin_brand_delete', brand_id=b.id) }}"
+                onsubmit="return confirm('Xoá thương hiệu này?');">
+            <button type="submit" class="btn" style="padding:0;background:none;color:var(--danger);font-weight:600">Xoá</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">Chưa có thương hiệu nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

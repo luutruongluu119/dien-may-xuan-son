@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Giới thiệu & Liên hệ — {{ settings.company_name }}{% endblock %}
+{% block content %}
+<div class="wrap section contact-layout">
+  <div>
+    <h1>Giới thiệu</h1>
+    <p>{{ settings.company_name }} chuyên cung cấp điều hòa, máy giặt, bình nóng lạnh, tủ lạnh chính hãng
+       với giá kho, kèm giao hàng và lắp đặt tận nơi tại khu vực Bắc Từ Liêm và nội thành Hà Nội.</p>
+    <p>Gọi ngay hotline để được tư vấn chọn sản phẩm phù hợp và báo giá tốt nhất.</p>
+
+    <h2 class="section-title" id="lien-he">Thông tin liên hệ</h2>
+    <ul class="contact-info">
+      <li>📍 {{ settings.address }}</li>
+      <li>☎ Hotline: <a href="tel:{{ settings.hotline|replace('.', '') }}">{{ settings.hotline }}</a></li>
+      {% if settings.email %}<li>✉ {{ settings.email }}</li>{% endif %}
+      {% if settings.facebook %}<li>👍 <a href="{{ settings.facebook }}" target="_blank" rel="noopener">Facebook</a></li>{% endif %}
+      {% if settings.youtube %}<li>▶ <a href="{{ settings.youtube }}" target="_blank" rel="noopener">YouTube</a></li>{% endif %}
+      {% if settings.zalo %}<li>💬 Zalo: {{ settings.zalo }}</li>{% endif %}
+    </ul>
+
+    <h2 class="section-title" id="ban-do">Bản đồ đường đi</h2>
+    <div class="map-embed">
+      <iframe src="https://www.google.com/maps?q={{ settings.address|urlencode }}&output=embed"
+              loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+  </div>
+
+  <div class="contact-form-box">
+    <h2>Để lại số điện thoại — {{ settings.company_name }} gọi lại tư vấn</h2>
+    <form action="{{ url_for('submit_lead') }}" method="post">
+      <input type="hidden" name="back" value="{{ request.path }}">
+      <label>Họ tên<input type="text" name="name" required></label>
+      <label>Số điện thoại<input type="tel" name="phone" required pattern="[0-9+ ]{8,15}"></label>
+      <label>Bạn cần tư vấn gì?<textarea name="note" rows="3" placeholder="Ví dụ: điều hòa 12000BTU cho phòng 20m²…"></textarea></label>
+      <button type="submit" class="btn btn-primary btn-block">Gửi yêu cầu tư vấn</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Tin tức — {{ settings.company_name }}{% endblock %}
+{% block content %}
+<div class="wrap section">
+  <nav class="breadcrumb"><a href="{{ url_for('home') }}">Trang chủ</a> › <span>Tin tức</span></nav>
+  <h1 class="section-title">Tin tức</h1>
+  <div class="news-grid">
+    {% for a in articles %}
+    <a href="{{ url_for('article_detail_page', slug=a.slug) }}" class="news-card">
+      <div class="news-thumb">{% if a.image %}<img src="{{ url_for('static', filename=a.image) }}" alt="{{ a.title }}">{% else %}📰{% endif %}</div>
+      <div class="news-body">
+        <h3>{{ a.title }}</h3>
+        <p class="muted">{{ a.excerpt }}</p>
+      </div>
+    </a>
+    {% else %}
+    <p class="muted">Chưa có bài viết nào.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

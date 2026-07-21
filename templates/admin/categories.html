@@ -1,0 +1,40 @@
+{% extends "admin/base.html" %}
+{% block title %}Danh mục{% endblock %}
+{% block heading %}Danh mục sản phẩm{% endblock %}
+{% block content %}
+<div class="admin-card">
+  <form method="post" class="form-row">
+    <label>Tên danh mục<input type="text" name="name" required></label>
+    <label>Icon (emoji)<input type="text" name="icon" placeholder="❄️"></label>
+    <div style="align-self:end"><button type="submit" class="btn btn-primary">+ Thêm danh mục</button></div>
+  </form>
+</div>
+<div class="admin-card">
+  <table class="admin-table">
+    <thead><tr><th>Icon</th><th>Tên</th><th>Slug</th><th></th></tr></thead>
+    <tbody>
+      {% for c in categories %}
+      <tr>
+        <td>
+          {% if c.icon and '/' in c.icon %}
+            <img src="{{ url_for('static', filename=c.icon) }}" alt="{{ c.name }}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+          {% else %}
+            {{ c.icon }}
+          {% endif %}
+        </td>
+        <td>{{ c.name }}</td>
+        <td class="muted">{{ c.slug }}</td>
+        <td>
+          <form class="inline-form" method="post" action="{{ url_for('admin_category_delete', cat_id=c.id) }}"
+                onsubmit="return confirm('Xoá danh mục này? Sản phẩm thuộc danh mục có thể bị lỗi hiển thị.');">
+            <button type="submit" class="btn" style="padding:0;background:none;color:var(--danger);font-weight:600">Xoá</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">Chưa có danh mục nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ policy.title }} — {{ settings.company_name }}{% endblock %}
+{% block content %}
+<div class="wrap section">
+  <nav class="breadcrumb"><a href="{{ url_for('home') }}">Trang chủ</a> › <span>{{ policy.title }}</span></nav>
+  <h1>{{ policy.title }}</h1>
+  {% for para in policy.body %}<p>{{ para }}</p>{% endfor %}
+  <p class="muted">Mọi thắc mắc vui lòng liên hệ hotline {{ settings.hotline }} để được hỗ trợ trực tiếp.</p>
+</div>
+{% endblock %}

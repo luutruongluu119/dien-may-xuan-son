@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% block title %}Cài đặt{% endblock %}
+{% block heading %}Cài đặt cửa hàng{% endblock %}
+{% block content %}
+<form class="admin-card" method="post">
+  <div class="form-row">
+    <label>Tên công ty<input type="text" name="company_name" value="{{ s.company_name }}" required></label>
+    <label>Hotline<input type="text" name="hotline" value="{{ s.hotline }}" required></label>
+  </div>
+  <label>Địa chỉ<input type="text" name="address" value="{{ s.address }}" required></label>
+  <label>Khẩu hiệu (hiển thị ở banner trang chủ)<input type="text" name="tagline" value="{{ s.tagline }}"></label>
+  <div class="form-row">
+    <label>Email<input type="email" name="email" value="{{ s.email }}"></label>
+    <label>Link Facebook<input type="text" name="facebook" value="{{ s.facebook }}"></label>
+  </div>
+  <div class="form-row">
+    <label>Link YouTube<input type="text" name="youtube" value="{{ s.youtube }}"></label>
+    <label>Zalo<input type="text" name="zalo" value="{{ s.zalo }}"></label>
+  </div>
+  <button type="submit" class="btn btn-primary">Lưu cài đặt</button>
+</form>
+
+<form class="admin-card" method="post">
+  <h3 style="margin-top:0">Đổi mật khẩu đăng nhập</h3>
+  <label>Mật khẩu mới (để trống nếu không đổi)<input type="password" name="new_password"></label>
+  <button type="submit" class="btn btn-outline">Đổi mật khẩu</button>
+</form>
+{% endblock %}
