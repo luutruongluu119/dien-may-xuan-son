@@ -14,6 +14,7 @@ DEFAULT_CLAUDE_MODEL = "claude-sonnet-5"
 GEMINI_URL = ("https://generativelanguage.googleapis.com/v1beta/models/"
               "{model}:generateContent?key={key}")
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-image"
+DEFAULT_GEMINI_CHAT_MODEL = "gemini-flash-latest"
 
 
 class AIError(Exception):
@@ -55,6 +56,51 @@ def generate(settings: dict, system: str, user: str, messages: list | None = Non
         return "".join(b.get("text", "") for b in data["content"])
     except (KeyError, TypeError):
         raise AIError(f"Claude trả về dữ liệu lạ: {json.dumps(data)[:400]}")
+
+
+def _gemini_chat(settings: dict, system: str, messages: list, max_tokens: int = 1024) -> str:
+    key = (settings.get("gemini_key") or "").strip()
+    if not key:
+        raise AIError("Chưa có Gemini API key — vào Cài đặt để dán key.")
+    model = (settings.get("gemini_chat_model") or DEFAULT_GEMINI_CHAT_MODEL).strip()
+    contents = [
+        {"role": "model" if m["role"] == "assistant" else "user",
+         "parts": [{"text": m["content"]}]}
+        for m in messages
+    ]
+    req = urllib.request.Request(
+        GEMINI_URL.format(model=model, key=key),
+        data=json.dumps({
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": contents,
+            "generationConfig": {"temperature": 0.7, "maxOutputTokens": max_tokens},
+        }).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:600]
+        raise AIError(f"Gemini trả lỗi HTTP {e.code}: {body}")
+    except urllib.error.URLError as e:
+        raise AIError(f"Không kết nối được tới Gemini: {e.reason}")
+    try:
+        return "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
+    except (KeyError, IndexError, TypeError):
+        raise AIError(f"Gemini trả về dữ liệu lạ: {json.dumps(data)[:400]}")
+
+
+def chat_reply(settings: dict, system: str, messages: list, max_tokens: int = 1024) -> str:
+    """Trả lời chat nhiều lượt — ưu tiên Gemini (có gói miễn phí) nếu đã dán
+    Gemini key, không thì dùng Claude nếu có key đó."""
+    if (settings.get("gemini_key") or "").strip():
+        return _gemini_chat(settings, system, messages, max_tokens)
+    if (settings.get("claude_key") or "").strip():
+        return generate(settings, system, messages[-1]["content"] if messages else "",
+                         messages=messages, max_tokens=max_tokens)
+    raise AIError("Chưa cấu hình API key nào (Gemini hoặc Claude) — vào Cài đặt để dán key.")
 
 
 def generate_image(settings: dict, prompt: str) -> dict:

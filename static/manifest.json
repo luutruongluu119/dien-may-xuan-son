@@ -1,0 +1,25 @@
+{
+  "name": "Điện Máy Xuân Sơn — Điều hòa, máy giặt, tủ lạnh chính hãng",
+  "short_name": "Xuân Sơn",
+  "description": "Điện máy chính hãng, giá kho, giao lắp tận nơi tại Hà Nội.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#1b5e20",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/static/img/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

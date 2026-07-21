@@ -226,6 +226,26 @@ def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXT
 
 
+def optimize_to_webp(path: str) -> str:
+    """Convert a just-saved JPG/PNG upload to WebP in place for faster page loads.
+    Returns the (possibly new) file path; falls back to the original on any error."""
+    root, ext = os.path.splitext(path)
+    if ext.lower() not in (".jpg", ".jpeg", ".png"):
+        return path
+    try:
+        from PIL import Image
+        im = Image.open(path)
+        webp_path = root + ".webp"
+        if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+            im.convert("RGBA").save(webp_path, "WEBP", quality=85, method=6)
+        else:
+            im.convert("RGB").save(webp_path, "WEBP", quality=82, method=6)
+        os.remove(path)
+        return webp_path
+    except Exception:
+        return path
+
+
 def save_upload(file_storage):
     if not file_storage or not file_storage.filename:
         return None
@@ -233,12 +253,14 @@ def save_upload(file_storage):
         return None
     ext = file_storage.filename.rsplit(".", 1)[1].lower()
     fname = f"{uuid.uuid4().hex}.{ext}"
+    dest = os.path.join(UPLOAD_DIR, fname)
     try:
-        file_storage.save(os.path.join(UPLOAD_DIR, fname))
+        file_storage.save(dest)
     except OSError:
         flash("Bản online không lưu được ảnh upload (chỉ đọc) — sửa ảnh ở máy chủ chính rồi đẩy lại lên GitHub.", "error")
         return None
-    return f"uploads/products/{fname}"
+    dest = optimize_to_webp(dest)
+    return f"uploads/products/{os.path.basename(dest)}"
 
 
 def save_brand_logo(file_storage):
@@ -248,23 +270,27 @@ def save_brand_logo(file_storage):
         return None
     ext = file_storage.filename.rsplit(".", 1)[1].lower()
     fname = f"{uuid.uuid4().hex}.{ext}"
+    dest = os.path.join(BRAND_UPLOAD_DIR, fname)
     try:
-        file_storage.save(os.path.join(BRAND_UPLOAD_DIR, fname))
+        file_storage.save(dest)
     except OSError:
         flash("Bản online không lưu được ảnh upload (chỉ đọc) — sửa ảnh ở máy chủ chính rồi đẩy lại lên GitHub.", "error")
         return None
-    return f"uploads/brands/{fname}"
+    dest = optimize_to_webp(dest)
+    return f"uploads/brands/{os.path.basename(dest)}"
 
 
 def save_generated_image_bytes(mime: str, b64data: str) -> str:
     ext = {"image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp"}.get(mime, "png")
     fname = f"{uuid.uuid4().hex}.{ext}"
+    dest = os.path.join(ARTICLE_UPLOAD_DIR, fname)
     try:
-        with open(os.path.join(ARTICLE_UPLOAD_DIR, fname), "wb") as f:
+        with open(dest, "wb") as f:
             f.write(base64.b64decode(b64data))
     except OSError:
         return ""
-    return f"uploads/articles/{fname}"
+    dest = optimize_to_webp(dest)
+    return f"uploads/articles/{os.path.basename(dest)}"
 
 
 def build_article_image_prompt(title: str, category_name: str) -> str:
@@ -622,8 +648,8 @@ def api_chat():
         return {"error": "Thiếu nội dung tin nhắn."}, 400
 
     settings = db.load_settings()
-    if not (settings.get("claude_key") or "").strip():
-        return {"error": "Chat AI chưa được bật — chủ shop cần dán Claude API key trong Cài đặt."}, 400
+    if not (settings.get("claude_key") or settings.get("gemini_key") or "").strip():
+        return {"error": "Chat AI chưa được bật — chủ shop cần dán Gemini hoặc Claude API key trong Cài đặt."}, 400
 
     messages = [
         {"role": m["role"], "content": m["content"]}
@@ -633,7 +659,7 @@ def api_chat():
     products = db.search_products_for_chat(last_user, limit=6)
     system = build_chat_system(settings, g.nav_categories, products)
     try:
-        reply = ai.generate(settings, system, last_user, messages=messages, max_tokens=1024)
+        reply = ai.chat_reply(settings, system, messages, max_tokens=1024)
     except ai.AIError as e:
         print(f"[api_chat] AIError: {e}", file=sys.stderr)
         return {"error": f"Xin lỗi, trợ lý AI đang gặp sự cố kỹ thuật. Anh/chị vui lòng gọi hotline {settings['hotline']} để được tư vấn ngay ạ."}, 400

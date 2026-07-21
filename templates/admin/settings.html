@@ -37,11 +37,12 @@
 <form class="admin-card" method="post">
   <input type="hidden" name="ai_config_submitted" value="1">
   <h3 style="margin-top:0">Cấu hình AI viết bài</h3>
-  <p class="small-note">Claude API key dùng để bấm "Tạo nháp bằng AI" khi viết bài trong mục Tin tức, và để bật khung <strong>chat AI tư vấn cho khách</strong> nổi trên web (nếu để trống thì khung chat không hiện). Lấy key tại console.anthropic.com.</p>
+  <p class="small-note">Cả 2 key bên dưới đều bật khung <strong>chat AI tư vấn cho khách</strong> nổi trên web (chỉ cần 1 trong 2 là đủ, để trống cả hai thì khung chat không hiện) — nếu có cả hai, hệ thống ưu tiên dùng Gemini trước vì Gemini có gói <strong>miễn phí</strong>, Claude API là trả phí theo lượng dùng.</p>
+  <p class="small-note">Gemini API key — <strong>miễn phí</strong>, lấy tại aistudio.google.com/apikey. Dùng cho chat AI tư vấn khách và tự tạo ảnh minh hoạ cho bài viết.</p>
+  <label>Gemini API key<input type="password" name="gemini_key" value="{{ s.gemini_key }}" placeholder="AIza..."></label>
+  <p class="small-note">Claude API key — trả phí theo lượng dùng, dùng để bấm "Tạo nháp bằng AI" khi viết bài trong mục Tin tức, và cũng có thể dùng cho chat AI nếu bạn không dùng Gemini. Lấy key tại console.anthropic.com.</p>
   <label>Claude API key<input type="password" name="claude_key" value="{{ s.claude_key }}" placeholder="sk-ant-..."></label>
   <label>Model (để trống dùng mặc định)<input type="text" name="claude_model" value="{{ s.claude_model }}" placeholder="claude-sonnet-5"></label>
-  <p class="small-note">Gemini API key dùng để tự tạo ảnh minh hoạ cho bài viết. Lấy key miễn phí tại aistudio.google.com/apikey.</p>
-  <label>Gemini API key<input type="password" name="gemini_key" value="{{ s.gemini_key }}" placeholder="AIza..."></label>
   <p class="small-note">Lịch tự động: khi bật, hệ thống tự lấy chủ đề từ Hàng đợi để viết nháp + tạo ảnh theo tuần — bài luôn ở dạng nháp chờ bạn duyệt, không tự đăng thẳng. Chỉ chạy khi app chạy như 1 tiến trình sống lâu dài (VPS), không có tác dụng trên bản Vercel hiện tại.</p>
   <label><input type="checkbox" name="schedule_enabled" style="width:auto;display:inline" {{ 'checked' if s.schedule_enabled }}> Bật tự động viết bài theo lịch</label>
   <label>Số bài muốn tạo mỗi tuần<input type="number" name="schedule_per_week" min="1" max="14" value="{{ s.schedule_per_week }}"></label>

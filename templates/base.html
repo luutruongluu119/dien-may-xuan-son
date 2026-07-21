@@ -23,6 +23,8 @@
 
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/logo-192.png') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#1b5e20">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
 <script type="application/ld+json">
@@ -139,16 +141,17 @@
 </footer>
 
 {% set is_admin_page = request.path.startswith('/admin') %}
+{% set chat_enabled = (settings.claude_key or settings.gemini_key) and not is_admin_page %}
 
 <div class="floating-contact">
   <a href="tel:{{ settings.hotline|replace('.', '') }}" class="floating-btn floating-call" title="Gọi hotline">☎</a>
   {% if settings.zalo %}<a href="https://zalo.me/{{ settings.zalo }}" target="_blank" rel="noopener" class="floating-btn floating-zalo" title="Chat Zalo">💬</a>{% endif %}
-  {% if settings.claude_key and not is_admin_page %}
+  {% if chat_enabled %}
   <button type="button" class="floating-btn floating-ai" id="aiChatToggle" title="Hỏi trợ lý AI">🤖</button>
   {% endif %}
 </div>
 
-{% if settings.claude_key and not is_admin_page %}
+{% if chat_enabled %}
 <div class="ai-chat-panel" id="aiChatPanel" aria-hidden="true">
   <div class="ai-chat-head">
     <div>
@@ -225,7 +228,7 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-{% if settings.claude_key and not is_admin_page %}<script src="{{ url_for('static', filename='js/chat.js') }}"></script>{% endif %}
+{% if chat_enabled %}<script src="{{ url_for('static', filename='js/chat.js') }}"></script>{% endif %}
 {% if not is_admin_page %}<script src="{{ url_for('static', filename='js/popup.js') }}"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
