@@ -9,14 +9,16 @@ from __future__ import annotations
 
 import base64
 import os
+import subprocess
 import sys
+import threading
 import uuid
 from datetime import datetime, timedelta
 from urllib.parse import quote as urlquote
 
 from flask import (
-    Flask, Response, abort, flash, g, redirect, render_template, request,
-    session, url_for,
+    Flask, Response, abort, flash, g, jsonify, redirect, render_template,
+    request, session, url_for,
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -202,7 +204,7 @@ def generate_article_draft(settings: dict, content_type: str, keyword: str,
         content_label=AI_CONTENT_TYPES[content_type],
     )
     user_msg = build_ai_user_message(keyword, category_name, products, notes)
-    raw = ai.generate(settings, system, user_msg)
+    raw = ai.generate_text(settings, system, user_msg)
     draft = ai.extract_json(raw)
     draft["keyword"] = keyword
     draft["related_product_ids"] = ",".join(str(p["id"]) for p in products)
@@ -356,6 +358,109 @@ def run_scheduled_generation():
         "related_product_ids": draft.get("related_product_ids", ""),
     })
     db.update_queue_item(item["id"], {"status": "da_tao", "article_id": article_id})
+
+
+# --------------------------------------------------- đăng bài nhanh (1 nút)
+
+PUBLISH_JOBS: dict[str, dict] = {}
+PUBLISH_JOBS_LOCK = threading.Lock()
+
+
+def _set_publish_job(job_id: str, **kw) -> None:
+    with PUBLISH_JOBS_LOCK:
+        PUBLISH_JOBS[job_id].update(kw)
+
+
+def _new_publish_job() -> str:
+    job_id = uuid.uuid4().hex[:10]
+    with PUBLISH_JOBS_LOCK:
+        PUBLISH_JOBS[job_id] = {"status": "running", "stage": "Chuẩn bị…",
+                                "error": None, "result": None}
+    return job_id
+
+
+def do_publish_now(job_id: str, content_type: str, keyword: str, category_name: str,
+                   notes: str, product_ids: list[int]) -> None:
+    """Viết bài bằng AI (ưu tiên Gemini, xem ai.generate_text) + tạo ảnh minh
+    hoạ + đăng NGAY (published=1), rồi tự commit + push GitHub + deploy
+    Vercel để bài lên thật trên site ngay lập tức. Chỉ chạy được ở máy local
+    (cần git + vercel CLI) — bản chạy trên Vercel có filesystem chỉ đọc nên
+    không thể tự commit/deploy chính nó."""
+    if os.environ.get("VERCEL"):
+        _set_publish_job(job_id, status="error",
+                         error="Chức năng này chỉ chạy được ở máy local (cần git/vercel CLI).")
+        return
+    try:
+        settings = db.load_settings()
+        products = db.get_products_by_ids(product_ids[:4])
+
+        _set_publish_job(job_id, stage="AI đang viết bài…")
+        draft = generate_article_draft(settings, content_type, keyword, category_name, products, notes)
+
+        _set_publish_job(job_id, stage="Đang tạo ảnh minh hoạ…")
+        image_path = ""
+        if (settings.get("gemini_key") or "").strip():
+            try:
+                prompt = build_article_image_prompt(draft.get("title") or keyword, category_name)
+                img = ai.generate_image(settings, prompt)
+                image_path = save_generated_image_bytes(img["mime"], img["data"])
+            except ai.AIError:
+                pass  # không có ảnh vẫn đăng được, không chặn cả bài viết
+
+        _set_publish_job(job_id, stage="Đang lưu bài viết…")
+        article_id = db.create_article({
+            "title": draft.get("title") or keyword,
+            "image": image_path,
+            "excerpt": draft.get("excerpt", ""),
+            "content": draft.get("content", ""),
+            "category": category_name or "Kiến thức tiêu dùng",
+            "published": 1,
+            "meta_title": draft.get("meta_title", ""),
+            "meta_description": draft.get("meta_description", ""),
+            "keyword": draft.get("keyword", keyword),
+            "related_product_ids": draft.get("related_product_ids", ""),
+        })
+        article = db.get_article(article_id)
+
+        _set_publish_job(job_id, stage="Đang đưa bài lên site thật (git + Vercel)…")
+        git_files = ["data/shop.db"]
+        if image_path:
+            git_files.append("static/" + image_path)
+        try:
+            add = subprocess.run(["git", "add"] + git_files, cwd=BASE_DIR,
+                                 capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if add.returncode != 0:
+                raise RuntimeError("git add lỗi: " + (add.stderr or add.stdout)[-500:])
+            commit = subprocess.run(
+                ["git", "commit", "-m", f"Tự động đăng bài: {article['title']}"],
+                cwd=BASE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if commit.returncode != 0 and "nothing to commit" not in (commit.stdout + commit.stderr):
+                raise RuntimeError("git commit lỗi: " + (commit.stderr or commit.stdout)[-500:])
+            push = subprocess.run(["git", "push"], cwd=BASE_DIR, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace")
+            if push.returncode != 0:
+                raise RuntimeError("git push lỗi: " + push.stderr[-500:])
+            deploy = subprocess.run("npx vercel --prod --yes", cwd=BASE_DIR, shell=True,
+                                    capture_output=True, text=True, timeout=240,
+                                    encoding="utf-8", errors="replace")
+            if deploy.returncode != 0:
+                raise RuntimeError("vercel deploy lỗi: " + deploy.stderr[-500:])
+        except Exception as exc:  # noqa: BLE001 — bài đã lưu local, chỉ bước đẩy lên site lỗi
+            _set_publish_job(
+                job_id, status="done", stage="Đã lưu bài, nhưng CHƯA đẩy lên site thật được",
+                result={"article_id": article_id, "slug": article["slug"],
+                        "title": article["title"], "deployed": False,
+                        "deploy_error": str(exc)[:500]})
+            return
+
+        _set_publish_job(
+            job_id, status="done", stage="Hoàn tất — đã lên site thật",
+            result={"article_id": article_id, "slug": article["slug"],
+                    "title": article["title"], "deployed": True})
+    except ai.AIError as exc:
+        _set_publish_job(job_id, status="error", error=str(exc))
+    except Exception as exc:  # noqa: BLE001 — surfaced to the UI
+        _set_publish_job(job_id, status="error", error=str(exc))
 
 
 def parse_specs(text: str):
@@ -976,6 +1081,46 @@ def admin_api_generate_article():
     except ai.AIError as e:
         return {"error": str(e)}, 400
     return draft
+
+
+@app.route("/admin/tin-tuc/dang-nhanh")
+@login_required
+def admin_publish_now_page():
+    return render_template("admin/publish_now.html", **_article_form_context())
+
+
+@app.route("/admin/api/dang-nhanh", methods=["POST"])
+@login_required
+def admin_api_publish_now():
+    if os.environ.get("VERCEL"):
+        return {"error": "Chức năng này chỉ chạy được ở máy local (cần git/vercel CLI)."}, 400
+    payload = request.get_json(silent=True) or {}
+    content_type = payload.get("content_type") or "huong_dan"
+    keyword = (payload.get("keyword") or "").strip()
+    if not keyword:
+        return {"error": "Vui lòng nhập chủ đề trước khi đăng."}, 400
+    category_name = (payload.get("category_name") or "").strip()
+    notes = (payload.get("notes") or "").strip()
+    try:
+        product_ids = [int(i) for i in (payload.get("product_ids") or [])][:4]
+    except (TypeError, ValueError):
+        product_ids = []
+
+    job_id = _new_publish_job()
+    threading.Thread(target=do_publish_now,
+                     args=(job_id, content_type, keyword, category_name, notes, product_ids),
+                     daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.route("/admin/api/dang-nhanh/<job_id>")
+@login_required
+def admin_api_publish_now_status(job_id):
+    with PUBLISH_JOBS_LOCK:
+        job = PUBLISH_JOBS.get(job_id)
+    if not job:
+        abort(404)
+    return jsonify(job)
 
 
 @app.route("/admin/tin-tuc/<int:article_id>/xoa", methods=["POST"])

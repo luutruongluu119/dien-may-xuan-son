@@ -92,6 +92,46 @@ def _gemini_chat(settings: dict, system: str, messages: list, max_tokens: int = 
         raise AIError(f"Gemini trả về dữ liệu lạ: {json.dumps(data)[:400]}")
 
 
+def _gemini_generate(settings: dict, system: str, user: str, max_tokens: int = 8192) -> str:
+    key = (settings.get("gemini_key") or "").strip()
+    if not key:
+        raise AIError("Chưa có Gemini API key — vào Cài đặt để dán key.")
+    model = (settings.get("gemini_chat_model") or DEFAULT_GEMINI_CHAT_MODEL).strip()
+    req = urllib.request.Request(
+        GEMINI_URL.format(model=model, key=key),
+        data=json.dumps({
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "generationConfig": {"temperature": 0.7, "maxOutputTokens": max_tokens},
+        }).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:600]
+        raise AIError(f"Gemini trả lỗi HTTP {e.code}: {body}")
+    except urllib.error.URLError as e:
+        raise AIError(f"Không kết nối được tới Gemini: {e.reason}")
+    try:
+        return "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
+    except (KeyError, IndexError, TypeError):
+        raise AIError(f"Gemini trả về dữ liệu lạ: {json.dumps(data)[:400]}")
+
+
+def generate_text(settings: dict, system: str, user: str, max_tokens: int = 8192) -> str:
+    """Sinh văn bản 1 lượt (system+user, không phải hội thoại nhiều lượt như
+    chat_reply) — ưu tiên Gemini nếu có key (có gói miễn phí), không thì dùng
+    Claude nếu có key đó. Dùng cho việc viết bài (generate_article_draft)."""
+    if (settings.get("gemini_key") or "").strip():
+        return _gemini_generate(settings, system, user, max_tokens)
+    if (settings.get("claude_key") or "").strip():
+        return generate(settings, system, user, max_tokens=max_tokens)
+    raise AIError("Chưa cấu hình API key nào (Gemini hoặc Claude) — vào Cài đặt để dán key.")
+
+
 def chat_reply(settings: dict, system: str, messages: list, max_tokens: int = 1024) -> str:
     """Trả lời chat nhiều lượt — ưu tiên Gemini (có gói miễn phí) nếu đã dán
     Gemini key, không thì dùng Claude nếu có key đó."""

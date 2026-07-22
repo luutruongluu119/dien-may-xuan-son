@@ -1,0 +1,131 @@
+{% extends "admin/base.html" %}
+{% block title %}Đăng bài nhanh bằng AI{% endblock %}
+{% block heading %}🚀 Đăng bài nhanh bằng AI{% endblock %}
+{% block content %}
+<div class="admin-card">
+  <p class="small-note">Gõ chủ đề, bấm 1 nút — AI viết bài (ưu tiên dùng Gemini nếu đã có key), tạo ảnh minh hoạ,
+    đăng công khai ngay, rồi TỰ ĐỘNG đẩy lên site thật (dieuhoa.vn) trong khoảng 30-90 giây. Không có bước xem
+    trước/sửa — nếu muốn xem lại trước khi đăng, dùng <a href="{{ url_for('admin_article_new') }}">Viết bài mới</a> thay vào đó.</p>
+  <div class="form-row">
+    <label>Loại bài
+      <select id="pn-content-type">
+        {% for key, label in content_types.items() %}
+        <option value="{{ key }}">{{ label.split(' — ')[0] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Danh mục liên quan
+      <select id="pn-category">
+        <option value="">— Không chọn —</option>
+        {% for c in categories %}
+        <option value="{{ c.name }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <label>Chủ đề / từ khóa mục tiêu (bắt buộc)<input type="text" id="pn-keyword" placeholder="vd: cách chọn điều hòa cho phòng 20m2"></label>
+  <label>Ghi chú thêm cho AI (không bắt buộc)<input type="text" id="pn-notes" placeholder="vd: nhấn mạnh lắp đặt miễn phí nội thành"></label>
+  <label>Sản phẩm liên quan (chọn tối đa 4, gõ để lọc — không bắt buộc)
+    <input type="text" id="pn-product-filter" placeholder="Gõ tên sản phẩm để lọc...">
+  </label>
+  <div id="pn-product-list" class="ai-product-list"></div>
+  <button type="button" class="btn btn-primary" id="pn-go-btn">🚀 Tạo &amp; Đăng ngay lên site thật</button>
+  <p class="small-note" id="pn-status"></p>
+  <div id="pn-result" class="admin-card" style="display:none;margin-top:12px;"></div>
+</div>
+
+<script>
+const PN_PRODUCTS = {{ products_for_ai|tojson }};
+let pnSelected = new Set();
+
+function pnRenderProductList() {
+  const q = document.getElementById("pn-product-filter").value.trim().toLowerCase();
+  const box = document.getElementById("pn-product-list");
+  const matches = PN_PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q)).slice(0, 40);
+  box.innerHTML = matches.map(p => {
+    const checked = pnSelected.has(p.id) ? "checked" : "";
+    return `<label class="ai-product-row"><input type="checkbox" value="${p.id}" ${checked}> ${p.name} <span class="small-note">(${p.category})</span></label>`;
+  }).join("") || '<p class="small-note">Không tìm thấy sản phẩm phù hợp.</p>';
+  box.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const id = Number(cb.value);
+      if (cb.checked) {
+        if (pnSelected.size >= 4) { cb.checked = false; return; }
+        pnSelected.add(id);
+      } else {
+        pnSelected.delete(id);
+      }
+    });
+  });
+}
+document.getElementById("pn-product-filter").addEventListener("input", pnRenderProductList);
+pnRenderProductList();
+
+function pnPoll(jobId) {
+  const status = document.getElementById("pn-status");
+  const timer = setInterval(async () => {
+    try {
+      const res = await fetch("/admin/api/dang-nhanh/" + jobId);
+      const job = await res.json();
+      if (job.status === "running") {
+        status.textContent = job.stage || "Đang xử lý…";
+        return;
+      }
+      clearInterval(timer);
+      document.getElementById("pn-go-btn").disabled = false;
+      if (job.status === "error") {
+        status.textContent = "Lỗi: " + (job.error || "không rõ nguyên nhân");
+        return;
+      }
+      status.textContent = job.stage || "Hoàn tất";
+      const r = job.result || {};
+      const box = document.getElementById("pn-result");
+      box.style.display = "block";
+      if (r.deployed) {
+        box.innerHTML = `<p>✅ Đã đăng và lên site thật: <b>${r.title}</b></p>
+          <p><a href="https://dieuhoa.vn/tin-tuc/${r.slug}" target="_blank" class="btn btn-outline">Xem bài trên site thật</a>
+          <a href="/admin/tin-tuc/${r.article_id}/sua" class="btn btn-outline">Sửa bài</a></p>`;
+      } else {
+        box.innerHTML = `<p>⚠️ Đã lưu bài <b>${r.title}</b> ở máy local, nhưng CHƯA đẩy lên site thật được.</p>
+          <p class="small-note">Lỗi đẩy lên: ${r.deploy_error || ""}</p>
+          <p><a href="/admin/tin-tuc/${r.article_id}/sua" class="btn btn-outline">Xem/sửa bài (local)</a></p>`;
+      }
+    } catch (err) {
+      clearInterval(timer);
+      document.getElementById("pn-go-btn").disabled = false;
+      status.textContent = "Lỗi kết nối: " + err;
+    }
+  }, 1500);
+}
+
+document.getElementById("pn-go-btn").addEventListener("click", async () => {
+  const keyword = document.getElementById("pn-keyword").value.trim();
+  const status = document.getElementById("pn-status");
+  if (!keyword) { status.textContent = "Vui lòng nhập chủ đề trước khi đăng."; return; }
+  const btn = document.getElementById("pn-go-btn");
+  btn.disabled = true;
+  document.getElementById("pn-result").style.display = "none";
+  status.textContent = "Đang bắt đầu…";
+  try {
+    const res = await fetch("{{ url_for('admin_api_publish_now') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        content_type: document.getElementById("pn-content-type").value,
+        category_name: document.getElementById("pn-category").value,
+        keyword: keyword,
+        notes: document.getElementById("pn-notes").value.trim(),
+        product_ids: Array.from(pnSelected),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = "Lỗi: " + (data.error || "không rõ nguyên nhân"); btn.disabled = false; return; }
+    status.textContent = "Đang xử lý — có thể mất 30-90 giây, cứ để yên trang này…";
+    pnPoll(data.job_id);
+  } catch (err) {
+    status.textContent = "Lỗi kết nối: " + err;
+    btn.disabled = false;
+  }
+});
+</script>
+{% endblock %}
