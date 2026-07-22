@@ -1,0 +1,60 @@
+<div class="category-layout" id="results">
+  <aside class="filters">
+    <h3>Thương hiệu</h3>
+    <ul class="filter-list">
+      <li><a class="{{ 'active' if not brand_id else '' }}"
+             href="?{% if sort %}sort={{ sort }}{% endif %}"
+             hx-get="{{ request.path }}?{% if sort %}sort={{ sort }}{% endif %}"
+             hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#results">Tất cả</a></li>
+      {% for b in brands %}
+        <li><a class="{{ 'active' if brand_id == b.id else '' }}"
+               href="?brand={{ b.id }}{% if sort %}&sort={{ sort }}{% endif %}"
+               hx-get="{{ request.path }}?brand={{ b.id }}{% if sort %}&sort={{ sort }}{% endif %}"
+               hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#results">{{ b.name }}</a></li>
+      {% endfor %}
+    </ul>
+  </aside>
+
+  <div class="listing">
+    <div class="listing-head">
+      <h1 class="section-title">{{ category.name if category else 'Kết quả tìm kiếm' }}{% if filter_label %} — {{ filter_label }}{% endif %}
+        <span class="muted">({{ total }} sản phẩm)</span></h1>
+      <form class="sort-form" method="get"
+            hx-get="{{ request.path }}" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#results">
+        {% if brand_id %}<input type="hidden" name="brand" value="{{ brand_id }}">{% endif %}
+        {% if search_q %}<input type="hidden" name="q" value="{{ search_q }}">{% endif %}
+        {% for k, v in extra_args.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+        <label>Sắp xếp
+          <select name="sort" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+            <option value="new" {{ 'selected' if sort=='new' }}>Mới nhất</option>
+            <option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Giá tăng dần</option>
+            <option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Giá giảm dần</option>
+            <option value="name" {{ 'selected' if sort=='name' }}>Tên A-Z</option>
+          </select>
+        </label>
+      </form>
+    </div>
+
+    {% if filter_label %}
+    <p class="muted">Đang lọc: {{ filter_label }} — <a href="{{ url_for('category_page', slug=category.slug, brand=brand_id) if category else url_for('search_page', q=search_q) }}">bỏ lọc</a></p>
+    {% endif %}
+
+    {% if products %}
+    <div class="grid">
+      {% for p in products %}{{ product_card(p) }}{% endfor %}
+    </div>
+    {% if pages > 1 %}
+    <div class="pagination">
+      {% for i in range(1, pages + 1) %}
+        <a class="{{ 'active' if i == page else '' }}"
+           href="?page={{ i }}{% if brand_id %}&brand={{ brand_id }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}{% if search_q %}&q={{ search_q }}{% endif %}{% for k, v in extra_args.items() %}&{{ k }}={{ v }}{% endfor %}"
+           hx-get="{{ request.path }}?page={{ i }}{% if brand_id %}&brand={{ brand_id }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}{% if search_q %}&q={{ search_q }}{% endif %}{% for k, v in extra_args.items() %}&{{ k }}={{ v }}{% endfor %}"
+           hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#results">{{ i }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="muted">Chưa có sản phẩm nào phù hợp.</p>
+    {% endif %}
+  </div>
+</div>

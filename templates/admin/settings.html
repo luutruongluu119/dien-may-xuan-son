@@ -39,9 +39,15 @@
   <h3 style="margin-top:0">Cấu hình AI viết bài</h3>
   <p class="small-note">Cả 2 key bên dưới đều bật khung <strong>chat AI tư vấn cho khách</strong> nổi trên web (chỉ cần 1 trong 2 là đủ, để trống cả hai thì khung chat không hiện) — nếu có cả hai, hệ thống ưu tiên dùng Gemini trước vì Gemini có gói <strong>miễn phí</strong>, Claude API là trả phí theo lượng dùng.</p>
   <p class="small-note">Gemini API key — <strong>miễn phí</strong>, lấy tại aistudio.google.com/apikey. Dùng cho chat AI tư vấn khách và tự tạo ảnh minh hoạ cho bài viết.</p>
-  <label>Gemini API key<input type="password" name="gemini_key" value="{{ s.gemini_key }}" placeholder="AIza..."></label>
+  {% if env_gemini %}
+  <p class="small-note" style="color:var(--success)">✅ Đang dùng Gemini key cấu hình an toàn qua biến môi trường Vercel (không lưu trong file này để tránh lộ trên GitHub công khai). Muốn đổi key thì vào Vercel → Settings → Environment Variables → <code>GEMINI_API_KEY</code>. Ô bên dưới chỉ áp dụng khi chạy ở máy local, không ảnh hưởng bản đang chạy thật.</p>
+  {% endif %}
+  <label>Gemini API key {% if env_gemini %}(chỉ dùng cho local, bản thật đang dùng biến môi trường){% endif %}<input type="password" name="gemini_key" value="{{ s.gemini_key }}" placeholder="AIza..."></label>
   <p class="small-note">Claude API key — trả phí theo lượng dùng, dùng để bấm "Tạo nháp bằng AI" khi viết bài trong mục Tin tức, và cũng có thể dùng cho chat AI nếu bạn không dùng Gemini. Lấy key tại console.anthropic.com.</p>
-  <label>Claude API key<input type="password" name="claude_key" value="{{ s.claude_key }}" placeholder="sk-ant-..."></label>
+  {% if env_claude %}
+  <p class="small-note" style="color:var(--success)">✅ Đang dùng Claude key cấu hình qua biến môi trường Vercel (<code>CLAUDE_API_KEY</code>), tương tự Gemini ở trên.</p>
+  {% endif %}
+  <label>Claude API key {% if env_claude %}(chỉ dùng cho local){% endif %}<input type="password" name="claude_key" value="{{ s.claude_key }}" placeholder="sk-ant-..."></label>
   <label>Model (để trống dùng mặc định)<input type="text" name="claude_model" value="{{ s.claude_model }}" placeholder="claude-sonnet-5"></label>
   <p class="small-note">Lịch tự động: khi bật, hệ thống tự lấy chủ đề từ Hàng đợi để viết nháp + tạo ảnh theo tuần — bài luôn ở dạng nháp chờ bạn duyệt, không tự đăng thẳng. Chỉ chạy khi app chạy như 1 tiến trình sống lâu dài (VPS), không có tác dụng trên bản Vercel hiện tại.</p>
   <label><input type="checkbox" name="schedule_enabled" style="width:auto;display:inline" {{ 'checked' if s.schedule_enabled }}> Bật tự động viết bài theo lịch</label>

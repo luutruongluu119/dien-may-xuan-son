@@ -36,6 +36,18 @@
 })();
 
 (function () {
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    var target = e.detail.target;
+    if (target && target.querySelector && target.querySelector(".lead-success")) {
+      var modal = target.closest(".modal-backdrop");
+      if (modal) {
+        setTimeout(function () { modal.classList.remove("open"); }, 2200);
+      }
+    }
+  });
+})();
+
+(function () {
   document.querySelectorAll("[data-tabs]").forEach(function (tabRow) {
     var grid = tabRow.closest("section").querySelector("[data-tab-grid]");
     if (!grid) return;

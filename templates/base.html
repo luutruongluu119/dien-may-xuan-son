@@ -26,6 +26,7 @@
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <meta name="theme-color" content="#1b5e20">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
 
 <script type="application/ld+json">
 {
@@ -181,13 +182,8 @@
     <button type="button" class="modal-close" id="giftPopupClose">✕</button>
     <h3>🎁 Nhận ưu đãi từ {{ settings.company_name }}</h3>
     <p class="muted">Để lại số điện thoại — {{ settings.company_name }} tặng ngay ưu đãi lắp đặt và gọi tư vấn chọn đúng sản phẩm, đúng giá kho.</p>
-    <form action="{{ url_for('submit_lead') }}" method="post">
-      <input type="hidden" name="note" value="Đăng ký nhận ưu đãi (popup)">
-      <input type="hidden" name="back" value="{{ request.full_path }}">
-      <label>Họ tên<input type="text" name="name" required></label>
-      <label>Số điện thoại<input type="tel" name="phone" required pattern="[0-9+ ]{8,15}"></label>
-      <button type="submit" class="btn btn-primary btn-block">Nhận ưu đãi ngay</button>
-    </form>
+    {% set lead_variant = 'gift' %}
+    {% include "_lead_form_fields.html" %}
   </div>
 </div>
 {% endif %}
@@ -216,14 +212,8 @@
     <button type="button" class="modal-close" id="orderModalClose">✕</button>
     <h3>Đặt hàng nhanh</h3>
     <p class="muted" id="orderModalProduct"></p>
-    <form action="{{ url_for('submit_lead') }}" method="post">
-      <input type="hidden" name="product_id" id="orderProductId">
-      <input type="hidden" name="back" id="orderBackUrl">
-      <label>Họ tên<input type="text" name="name" required></label>
-      <label>Số điện thoại<input type="tel" name="phone" required pattern="[0-9+ ]{8,15}"></label>
-      <label>Ghi chú<textarea name="note" rows="2" placeholder="Khu vực, thời gian giao lắp mong muốn…"></textarea></label>
-      <button type="submit" class="btn btn-primary btn-block">Gửi yêu cầu — {{ settings.company_name }} sẽ gọi lại</button>
-    </form>
+    {% set lead_variant = 'order' %}
+    {% include "_lead_form_fields.html" %}
   </div>
 </div>
 

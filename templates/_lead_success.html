@@ -1,0 +1,5 @@
+{% set body_id = 'giftPopupBody' if lead_variant == 'gift' else 'orderModalBody' %}
+<div id="{{ body_id }}" class="lead-success">
+  <span class="lead-success-icon">✅</span>
+  <p>Đã gửi yêu cầu! <b>{{ settings.company_name }}</b> sẽ gọi lại số <b>{{ lead_phone }}</b> trong ít phút để tư vấn.</p>
+</div>

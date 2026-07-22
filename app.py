@@ -624,13 +624,25 @@ def submit_lead():
     phone = request.form.get("phone", "").strip()
     product_id = request.form.get("product_id", type=int)
     note = request.form.get("note", "").strip()
+    variant = request.form.get("variant", "order")
+    is_htmx = request.headers.get("HX-Request") == "true"
+
     if not name or not phone:
+        if is_htmx:
+            return render_template(
+                "_lead_form_fields.html", lead_variant=variant, lead_name=name,
+                lead_phone=phone, lead_note=note, lead_product_id=product_id,
+                lead_back=request.form.get("back"),
+                lead_error="Vui lòng nhập đầy đủ họ tên và số điện thoại.",
+            )
         flash("Vui lòng nhập đầy đủ họ tên và số điện thoại.", "error")
-    else:
-        db.create_lead(name, phone, product_id, note)
-        flash("Cảm ơn bạn! Xuân Son sẽ gọi lại trong ít phút để tư vấn.", "success")
-    back = request.form.get("back") or url_for("home")
-    return redirect(back)
+        return redirect(request.form.get("back") or url_for("home"))
+
+    db.create_lead(name, phone, product_id, note)
+    if is_htmx:
+        return render_template("_lead_success.html", lead_variant=variant, lead_phone=phone)
+    flash("Cảm ơn bạn! Xuân Son sẽ gọi lại trong ít phút để tư vấn.", "success")
+    return redirect(request.form.get("back") or url_for("home"))
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -1043,7 +1055,9 @@ def admin_queue_delete(queue_id):
 @app.route("/admin/cai-dat", methods=["GET", "POST"])
 @login_required
 def admin_settings():
-    s = db.load_settings()
+    s = db.load_settings_raw()
+    env_gemini = bool(os.environ.get("GEMINI_API_KEY"))
+    env_claude = bool(os.environ.get("CLAUDE_API_KEY"))
     if request.method == "POST":
         s["company_name"] = request.form.get("company_name", s["company_name"]).strip()
         s["hotline"] = request.form.get("hotline", s["hotline"]).strip()
@@ -1066,7 +1080,7 @@ def admin_settings():
         db.save_settings(s)
         flash("Đã lưu cài đặt.", "success")
         return redirect(url_for("admin_settings"))
-    return render_template("admin/settings.html", s=s)
+    return render_template("admin/settings.html", s=s, env_gemini=env_gemini, env_claude=env_claude)
 
 
 # Lịch tự động chỉ chạy khi đây là 1 tiến trình sống lâu dài (VPS, không phải Vercel

@@ -4637,7 +4637,10 @@ def seed_if_empty():
                 )
 
 
-def load_settings() -> dict:
+def load_settings_raw() -> dict:
+    """Đọc settings CHỈ từ file, không áp biến môi trường — dùng cho form Cài đặt
+    trong admin để tránh hiện lộ hoặc ghi đè key thật (từ biến môi trường) xuống
+    file settings.json (file này nằm trong repo Git công khai)."""
     try:
         with open(SETTINGS_PATH, encoding="utf-8") as f:
             data = json.load(f)
@@ -4646,6 +4649,19 @@ def load_settings() -> dict:
         return merged
     except (OSError, json.JSONDecodeError):
         return dict(DEFAULT_SETTINGS)
+
+
+def load_settings() -> dict:
+    """Settings dùng cho toàn bộ web (chat AI, viết bài AI, hiển thị...).
+    Trên bản deploy công khai (repo GitHub public), API key thật không được lưu
+    trong settings.json (sẽ bị lộ) — ưu tiên đọc từ biến môi trường nếu có,
+    settings.json chỉ dùng cho dev local hoặc khi chưa set biến môi trường."""
+    merged = load_settings_raw()
+    if os.environ.get("GEMINI_API_KEY"):
+        merged["gemini_key"] = os.environ["GEMINI_API_KEY"]
+    if os.environ.get("CLAUDE_API_KEY"):
+        merged["claude_key"] = os.environ["CLAUDE_API_KEY"]
+    return merged
 
 
 def save_settings(data: dict):
@@ -4847,22 +4863,52 @@ def list_products(category_slug=None, brand_id=None, featured=None, q=None,
     return rows, total
 
 
-def search_products_for_chat(query: str, limit: int = 8):
+_CHAT_STOPWORDS = {
+    "cho", "tôi", "hỏi", "giá", "khoảng", "bao", "nhiêu", "là", "có", "không",
+    "muốn", "cần", "ạ", "ơi", "shop", "cửa", "hàng", "sản", "phẩm", "loại",
+    "nào", "với", "và", "của", "được", "này", "đó", "xin", "vui", "lòng",
+    "cái", "con", "mình", "bạn", "anh", "chị", "em", "dạ", "về", "một",
+    "cho tôi", "hỏi về",
+}
+
+
+def search_products_for_chat(query: str, limit: int = 6):
     """Tìm sản phẩm liên quan tới câu hỏi của khách (theo tên/hãng/danh mục/mô tả
-    ngắn) để ghim chatbot vào đúng dữ liệu thật đang bán, tránh bịa sản phẩm."""
-    words = [w for w in re.split(r"\s+", query.strip()) if len(w) > 1]
+    ngắn) để ghim chatbot vào đúng dữ liệu thật đang bán, tránh bịa sản phẩm.
+    Bỏ các từ đệm câu hỏi thường gặp và số lẻ tẻ ("1" trong "1 chiều" gần như vô
+    nghĩa khi đứng 1 mình), rồi XẾP HẠNG theo TỔNG ĐIỂM khớp (khớp tên sản phẩm
+    tính nặng hơn khớp tên danh mục) NGAY TRONG SQL — quan trọng vì nếu chỉ lọc
+    thô rồi LIMIT trước khi chấm điểm, một từ chung chung (vd "điều hòa" khớp
+    toàn bộ hơn 200 sản phẩm điều hòa) có thể chiếm hết chỗ trước khi kịp xếp
+    hạng, khiến đúng mẫu khách hỏi (vd Daikin 9000BTU cụ thể) bị rớt khỏi top."""
+    raw_words = [w.strip("?!.,;:") for w in re.split(r"\s+", query.lower().strip())]
+    words = [w for w in raw_words if len(w) > 1 and w not in _CHAT_STOPWORDS]
     if not words:
         return []
-    where_parts = []
+    words = words[:10]
+
+    score_parts = []
     params: list = []
-    for w in words[:6]:
-        where_parts.append(
-            "(p.name LIKE ? OR b.name LIKE ? OR c.name LIKE ? OR p.short_desc LIKE ?)"
+    for w in words:
+        like = f"%{w}%"
+        score_parts.append(
+            "(CASE WHEN p.name LIKE ? THEN 3 ELSE 0 END"
+            " + CASE WHEN b.name LIKE ? THEN 2 ELSE 0 END"
+            " + CASE WHEN c.name LIKE ? THEN 1 ELSE 0 END"
+            " + CASE WHEN p.short_desc LIKE ? THEN 1 ELSE 0 END)"
         )
-        params += [f"%{w}%"] * 4
-    sql = PRODUCT_SELECT + " WHERE " + " OR ".join(where_parts) + \
-        " ORDER BY p.is_featured DESC, p.created_at DESC LIMIT ?"
-    params.append(limit)
+        params += [like, like, like, like]
+    score_expr = " + ".join(score_parts)
+
+    sql = (
+        f"SELECT p.*, c.name AS category_name, c.slug AS category_slug, b.name AS brand_name, "
+        f"({score_expr}) AS relevance "
+        "FROM products p JOIN categories c ON c.id = p.category_id "
+        "LEFT JOIN brands b ON b.id = p.brand_id "
+        "WHERE (" + score_expr + ") > 0 "
+        "ORDER BY relevance DESC, p.is_featured DESC, p.created_at DESC LIMIT ?"
+    )
+    params = params + params + [limit]  # score_expr xuất hiện 2 lần (SELECT + WHERE)
     with get_conn() as c:
         return c.execute(sql, params).fetchall()
 

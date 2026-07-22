@@ -1,0 +1,21 @@
+{% set body_id = 'giftPopupBody' if lead_variant == 'gift' else 'orderModalBody' %}
+<div id="{{ body_id }}">
+  {% if lead_error %}<p class="flash flash-error">{{ lead_error }}</p>{% endif %}
+  <form hx-post="{{ url_for('submit_lead') }}" hx-target="#{{ body_id }}" hx-swap="innerHTML"
+        action="{{ url_for('submit_lead') }}" method="post">
+    <input type="hidden" name="variant" value="{{ lead_variant }}">
+    {% if lead_variant == 'order' %}
+      <input type="hidden" name="product_id" id="orderProductId" value="{{ lead_product_id or '' }}">
+      <input type="hidden" name="back" id="orderBackUrl" value="{{ lead_back or request.full_path }}">
+    {% else %}
+      <input type="hidden" name="note" value="Đăng ký nhận ưu đãi (popup)">
+      <input type="hidden" name="back" value="{{ lead_back or request.full_path }}">
+    {% endif %}
+    <label>Họ tên<input type="text" name="name" value="{{ lead_name or '' }}" required></label>
+    <label>Số điện thoại<input type="tel" name="phone" value="{{ lead_phone or '' }}" required pattern="[0-9+ ]{8,15}"></label>
+    {% if lead_variant == 'order' %}
+    <label>Ghi chú<textarea name="note" rows="2" placeholder="Khu vực, thời gian giao lắp mong muốn…">{{ lead_note or '' }}</textarea></label>
+    {% endif %}
+    <button type="submit" class="btn btn-primary btn-block">{{ 'Nhận ưu đãi ngay' if lead_variant == 'gift' else 'Gửi yêu cầu — ' ~ settings.company_name ~ ' sẽ gọi lại' }}</button>
+  </form>
+</div>
