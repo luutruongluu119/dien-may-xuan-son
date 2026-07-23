@@ -29,6 +29,27 @@
 </form>
 
 <form class="admin-card" method="post">
+  <input type="hidden" name="pixel_config_submitted" value="1">
+  <h3 style="margin-top:0">Facebook Pixel (chạy quảng cáo mục tiêu Chuyển đổi)</h3>
+  <p class="small-note">Pixel giúp Facebook học ai là khách thật từ web này (xem sản phẩm, để lại thông tin đặt hàng), để Xưởng Quảng Cáo chạy được mục tiêu Chuyển đổi thay vì chỉ Tin nhắn.</p>
+  <label>Pixel ID<input type="text" name="fb_pixel_id" value="{{ s.fb_pixel_id }}" placeholder="VD: 123456789012345"></label>
+  <p class="small-note">
+    Cách tạo: vào <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noopener">business.facebook.com/events_manager2</a> →
+    "Kết nối nguồn dữ liệu" (Connect Data Sources) → chọn "Web" → "Pixel Facebook" → đặt tên (VD "Điện Máy Xuân Sơn — Website") →
+    nhập <code>{{ request.host }}</code> → Tạo. Copy dãy số Pixel ID hiện ở trang tổng quan, dán vào ô trên.
+  </p>
+  {% if env_capi %}
+  <p class="small-note" style="color:var(--success)">✅ Đang dùng Conversions API token cấu hình qua biến môi trường Vercel (<code>FB_CAPI_TOKEN</code>), không lưu trong file này để tránh lộ trên GitHub công khai. Muốn đổi thì vào Vercel → Settings → Environment Variables.</p>
+  {% endif %}
+  <label>Conversions API access token {% if env_capi %}(chỉ dùng cho local, bản thật đang dùng biến môi trường){% endif %}<input type="password" name="fb_capi_token" value="{{ s.fb_capi_token }}" placeholder="EAAxxxxxxxx..."></label>
+  <p class="small-note">
+    Giúp web tự báo cho Facebook biết ai vừa để lại thông tin đặt hàng (sự kiện "Lead") thẳng từ server — đáng tin hơn nhiều so với chỉ báo qua trình duyệt (không bị AdBlock chặn mất). Cách lấy: trong Events Manager, chọn đúng Pixel vừa tạo ở trên → tab "Cài đặt" (Settings) → kéo xuống "Conversions API" → "Đặt tạo access token thủ công" (Generate access token) → copy chuỗi hiện ra (chỉ hiện 1 lần) → dán vào ô trên.
+    Để trống thì web vẫn chạy bình thường, chỉ là không có lớp báo dự phòng này (Pixel phía trình duyệt vẫn hoạt động).
+  </p>
+  <button type="submit" class="btn btn-primary">Lưu cấu hình Pixel</button>
+</form>
+
+<form class="admin-card" method="post">
   <h3 style="margin-top:0">Đổi mật khẩu đăng nhập</h3>
   <label>Mật khẩu mới (để trống nếu không đổi)<input type="password" name="new_password"></label>
   <button type="submit" class="btn btn-outline">Đổi mật khẩu</button>

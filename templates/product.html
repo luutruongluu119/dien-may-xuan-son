@@ -133,6 +133,19 @@
 </div>
 {% endblock %}
 {% block scripts %}
+{% if settings.fb_pixel_id %}
+<script>
+if (typeof fbq === "function") {
+  fbq('track', 'ViewContent', {
+    content_ids: [{{ product.id|tojson }}],
+    content_name: {{ product.name|tojson }},
+    content_type: 'product',
+    value: {{ (product.sale_price or product.price)|float }},
+    currency: 'VND'
+  });
+}
+</script>
+{% endif %}
 <script>
 document.querySelectorAll(".tab-btn").forEach(function (btn) {
   btn.addEventListener("click", function () {

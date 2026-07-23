@@ -1,4 +1,5 @@
 {% from "_macros.html" import cat_icon with context %}
+{% set is_admin_page = request.path.startswith('/admin') %}
 <!doctype html>
 <html lang="vi">
 <head>
@@ -27,6 +28,24 @@
 <meta name="theme-color" content="#1b5e20">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
+
+{% if settings.fb_pixel_id and not is_admin_page %}
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '{{ settings.fb_pixel_id }}');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id={{ settings.fb_pixel_id }}&ev=PageView&noscript=1"
+/></noscript>
+{% endif %}
 
 <script type="application/ld+json">
 {
@@ -141,7 +160,6 @@
   <div class="wrap footer-bottom">© {{ settings.company_name }}. Sản phẩm minh hoạ — thông tin thực tế cập nhật khi bổ sung dữ liệu.</div>
 </footer>
 
-{% set is_admin_page = request.path.startswith('/admin') %}
 {% set chat_enabled = (settings.claude_key or settings.gemini_key) and not is_admin_page %}
 
 <div class="floating-contact">

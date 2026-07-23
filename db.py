@@ -120,6 +120,8 @@ DEFAULT_SETTINGS = {
     "schedule_enabled": False,
     "schedule_per_week": 2,
     "fb_page_id": "",
+    "fb_pixel_id": "",
+    "fb_capi_token": "",
 }
 
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
@@ -4661,6 +4663,8 @@ def load_settings() -> dict:
         merged["gemini_key"] = os.environ["GEMINI_API_KEY"]
     if os.environ.get("CLAUDE_API_KEY"):
         merged["claude_key"] = os.environ["CLAUDE_API_KEY"]
+    if os.environ.get("FB_CAPI_TOKEN"):
+        merged["fb_capi_token"] = os.environ["FB_CAPI_TOKEN"]
     return merged
 
 

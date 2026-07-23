@@ -24,6 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import ai
 import db
+import fb_capi
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -744,6 +745,14 @@ def submit_lead():
         return redirect(request.form.get("back") or url_for("home"))
 
     db.create_lead(name, phone, product_id, note)
+    settings = db.load_settings()
+    if settings.get("fb_pixel_id") and settings.get("fb_capi_token"):
+        fb_capi.send_lead_event(
+            settings["fb_pixel_id"], settings["fb_capi_token"],
+            phone=phone, name=name, event_source_url=request.url,
+            client_ip=request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip(),
+            user_agent=request.headers.get("User-Agent", ""),
+            fbp=request.cookies.get("_fbp", ""), fbc=request.cookies.get("_fbc", ""))
     if is_htmx:
         return render_template("_lead_success.html", lead_variant=variant, lead_phone=phone)
     flash("Cảm ơn bạn! Xuân Son sẽ gọi lại trong ít phút để tư vấn.", "success")
@@ -1203,6 +1212,7 @@ def admin_settings():
     s = db.load_settings_raw()
     env_gemini = bool(os.environ.get("GEMINI_API_KEY"))
     env_claude = bool(os.environ.get("CLAUDE_API_KEY"))
+    env_capi = bool(os.environ.get("FB_CAPI_TOKEN"))
     if request.method == "POST":
         s["company_name"] = request.form.get("company_name", s["company_name"]).strip()
         s["hotline"] = request.form.get("hotline", s["hotline"]).strip()
@@ -1213,6 +1223,9 @@ def admin_settings():
         s["zalo"] = request.form.get("zalo", "").strip()
         s["email"] = request.form.get("email", "").strip()
         s["fb_page_id"] = request.form.get("fb_page_id", "").strip()
+        if "pixel_config_submitted" in request.form:
+            s["fb_pixel_id"] = request.form.get("fb_pixel_id", "").strip()
+            s["fb_capi_token"] = request.form.get("fb_capi_token", s.get("fb_capi_token", "")).strip()
         s["claude_key"] = request.form.get("claude_key", s.get("claude_key", "")).strip()
         s["claude_model"] = request.form.get("claude_model", s.get("claude_model", "")).strip() or ai.DEFAULT_CLAUDE_MODEL
         s["gemini_key"] = request.form.get("gemini_key", s.get("gemini_key", "")).strip()
@@ -1225,7 +1238,7 @@ def admin_settings():
         db.save_settings(s)
         flash("Đã lưu cài đặt.", "success")
         return redirect(url_for("admin_settings"))
-    return render_template("admin/settings.html", s=s, env_gemini=env_gemini, env_claude=env_claude)
+    return render_template("admin/settings.html", s=s, env_gemini=env_gemini, env_claude=env_claude, env_capi=env_capi)
 
 
 # Lịch tự động chỉ chạy khi đây là 1 tiến trình sống lâu dài (VPS, không phải Vercel
